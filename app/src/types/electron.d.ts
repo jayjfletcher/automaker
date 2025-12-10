@@ -308,7 +308,8 @@ export interface ElectronAPI {
   saveImageToTemp: (
     data: string,
     filename: string,
-    mimeType: string
+    mimeType: string,
+    projectPath?: string
   ) => Promise<{
     success: boolean;
     path?: string;

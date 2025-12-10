@@ -176,6 +176,7 @@ export interface AppActions {
   addProject: (project: Project) => void;
   removeProject: (projectId: string) => void;
   setCurrentProject: (project: Project | null) => void;
+  reorderProjects: (oldIndex: number, newIndex: number) => void;
 
   // View actions
   setCurrentView: (view: ViewMode) => void;
@@ -288,6 +289,13 @@ export const useAppStore = create<AppState & AppActions>()(
 
       removeProject: (projectId) => {
         set({ projects: get().projects.filter((p) => p.id !== projectId) });
+      },
+
+      reorderProjects: (oldIndex, newIndex) => {
+        const projects = [...get().projects];
+        const [movedProject] = projects.splice(oldIndex, 1);
+        projects.splice(newIndex, 0, movedProject);
+        set({ projects });
       },
 
       setCurrentProject: (project) => {

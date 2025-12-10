@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { ImageIcon, X, Loader2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { getElectronAPI } from "@/lib/electron";
+import { useAppStore } from "@/store/app-store";
 
 export interface FeatureImagePath {
   id: string;
@@ -51,6 +52,7 @@ export function DescriptionImageDropZone({
     new Map()
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const currentProject = useAppStore((state) => state.currentProject);
 
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -76,11 +78,14 @@ export function DescriptionImageDropZone({
       const api = getElectronAPI();
       // Check if saveImageToTemp method exists
       if (!api.saveImageToTemp) {
-        // Fallback for mock API - return a mock path
+        // Fallback for mock API - return a mock path in .automaker/images
         console.log("[DescriptionImageDropZone] Using mock path for image");
-        return `/tmp/automaker-images/${Date.now()}_${filename}`;
+        return `.automaker/images/${Date.now()}_${filename}`;
       }
-      const result = await api.saveImageToTemp(base64Data, filename, mimeType);
+
+      // Get projectPath from the store if available
+      const projectPath = currentProject?.path;
+      const result = await api.saveImageToTemp(base64Data, filename, mimeType, projectPath);
       if (result.success && result.path) {
         return result.path;
       }
@@ -130,7 +135,7 @@ export function DescriptionImageDropZone({
           const tempPath = await saveImageToTemp(base64, file.name, file.type);
 
           if (tempPath) {
-            const imageId = `img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            const imageId = `img-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
             const imagePathRef: FeatureImagePath = {
               id: imageId,
               path: tempPath,

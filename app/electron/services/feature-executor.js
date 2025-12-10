@@ -275,7 +275,57 @@ class FeatureExecutor {
       }
 
       // Build the prompt for this specific feature
-      const prompt = promptBuilder.buildFeaturePrompt(feature);
+      let prompt = promptBuilder.buildFeaturePrompt(feature);
+
+      // Add images to prompt if feature has imagePaths
+      if (feature.imagePaths && feature.imagePaths.length > 0) {
+        const contentBlocks = [];
+
+        // Add text block
+        contentBlocks.push({
+          type: "text",
+          text: prompt,
+        });
+
+        // Add image blocks
+        const fs = require("fs");
+        const path = require("path");
+        for (const imagePathObj of feature.imagePaths) {
+          try {
+            const imagePath = imagePathObj.path;
+            const imageBuffer = fs.readFileSync(imagePath);
+            const base64Data = imageBuffer.toString("base64");
+            const ext = path.extname(imagePath).toLowerCase();
+            const mimeTypeMap = {
+              ".jpg": "image/jpeg",
+              ".jpeg": "image/jpeg",
+              ".png": "image/png",
+              ".gif": "image/gif",
+              ".webp": "image/webp",
+            };
+            const mediaType = mimeTypeMap[ext] || imagePathObj.mimeType || "image/png";
+
+            contentBlocks.push({
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: mediaType,
+                data: base64Data,
+              },
+            });
+
+            console.log(`[FeatureExecutor] Added image to prompt: ${imagePath}`);
+          } catch (error) {
+            console.error(
+              `[FeatureExecutor] Failed to load image ${imagePathObj.path}:`,
+              error
+            );
+          }
+        }
+
+        // Use content blocks instead of plain text
+        prompt = contentBlocks;
+      }
 
       // Planning: Analyze the codebase and create implementation plan
       sendToRenderer({
@@ -613,7 +663,58 @@ class FeatureExecutor {
       }
 
       // Build prompt with previous context
-      const prompt = promptBuilder.buildResumePrompt(feature, previousContext);
+      let prompt = promptBuilder.buildResumePrompt(feature, previousContext);
+
+      // Add images to prompt if feature has imagePaths or followUpImages
+      const imagePaths = feature.followUpImages || feature.imagePaths;
+      if (imagePaths && imagePaths.length > 0) {
+        const contentBlocks = [];
+
+        // Add text block
+        contentBlocks.push({
+          type: "text",
+          text: prompt,
+        });
+
+        // Add image blocks
+        const fs = require("fs");
+        const path = require("path");
+        for (const imagePathObj of imagePaths) {
+          try {
+            const imagePath = imagePathObj.path;
+            const imageBuffer = fs.readFileSync(imagePath);
+            const base64Data = imageBuffer.toString("base64");
+            const ext = path.extname(imagePath).toLowerCase();
+            const mimeTypeMap = {
+              ".jpg": "image/jpeg",
+              ".jpeg": "image/jpeg",
+              ".png": "image/png",
+              ".gif": "image/gif",
+              ".webp": "image/webp",
+            };
+            const mediaType = mimeTypeMap[ext] || imagePathObj.mimeType || "image/png";
+
+            contentBlocks.push({
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: mediaType,
+                data: base64Data,
+              },
+            });
+
+            console.log(`[FeatureExecutor] Added image to resume prompt: ${imagePath}`);
+          } catch (error) {
+            console.error(
+              `[FeatureExecutor] Failed to load image ${imagePathObj.path}:`,
+              error
+            );
+          }
+        }
+
+        // Use content blocks instead of plain text
+        prompt = contentBlocks;
+      }
 
       // Use appropriate provider based on model type
       let currentQuery;

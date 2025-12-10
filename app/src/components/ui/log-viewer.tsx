@@ -144,7 +144,7 @@ function LogEntryItem({ entry, isExpanded, onToggle }: LogEntryItemProps) {
           {entry.title}
         </span>
 
-        <span className="text-sm text-zinc-400 truncate flex-1 ml-2">
+        <span className="text-xs text-zinc-400 truncate flex-1 ml-2">
           {!isExpanded &&
             entry.content.slice(0, 80) +
               (entry.content.length > 80 ? "..." : "")}
@@ -156,11 +156,11 @@ function LogEntryItem({ entry, isExpanded, onToggle }: LogEntryItemProps) {
           className="px-4 pb-3 pt-1"
           data-testid={`log-entry-content-${entry.id}`}
         >
-          <div className="font-mono text-sm space-y-1">
+          <div className="font-mono text-xs space-y-1">
             {formattedContent.map((part, index) => (
               <div key={index}>
                 {part.type === "json" ? (
-                  <pre className="bg-zinc-900/50 rounded p-2 overflow-x-auto text-xs text-purple-300">
+                  <pre className="bg-zinc-900/50 rounded p-2 overflow-x-auto text-xs text-primary">
                     {part.content}
                   </pre>
                 ) : (

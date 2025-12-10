@@ -86,8 +86,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Auto Mode API
   autoMode: {
     // Start auto mode
-    start: (projectPath) =>
-      ipcRenderer.invoke("auto-mode:start", { projectPath }),
+    start: (projectPath, maxConcurrency) =>
+      ipcRenderer.invoke("auto-mode:start", { projectPath, maxConcurrency }),
 
     // Stop auto mode
     stop: () => ipcRenderer.invoke("auto-mode:stop"),

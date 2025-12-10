@@ -62,7 +62,7 @@ export function useElectronAgent({
           imageCount: images?.length || 0
         });
 
-        // Save images to temp files and get paths
+        // Save images to .automaker/images and get paths
         let imagePaths: string[] | undefined;
         if (images && images.length > 0) {
           imagePaths = [];
@@ -70,11 +70,12 @@ export function useElectronAgent({
             const result = await window.electronAPI.saveImageToTemp(
               image.data,
               image.filename,
-              image.mimeType
+              image.mimeType,
+              workingDirectory // Pass workingDirectory as projectPath
             );
             if (result.success && result.path) {
               imagePaths.push(result.path);
-              console.log("[useElectronAgent] Saved image to temp:", result.path);
+              console.log("[useElectronAgent] Saved image to .automaker/images:", result.path);
             } else {
               console.error("[useElectronAgent] Failed to save image:", result.error);
             }
@@ -304,7 +305,7 @@ export function useElectronAgent({
           imageCount: images?.length || 0
         });
 
-        // Save images to temp files and get paths
+        // Save images to .automaker/images and get paths
         let imagePaths: string[] | undefined;
         if (images && images.length > 0) {
           imagePaths = [];
@@ -312,11 +313,12 @@ export function useElectronAgent({
             const result = await window.electronAPI.saveImageToTemp(
               image.data,
               image.filename,
-              image.mimeType
+              image.mimeType,
+              workingDirectory // Pass workingDirectory as projectPath
             );
             if (result.success && result.path) {
               imagePaths.push(result.path);
-              console.log("[useElectronAgent] Saved image to temp:", result.path);
+              console.log("[useElectronAgent] Saved image to .automaker/images:", result.path);
             } else {
               console.error("[useElectronAgent] Failed to save image:", result.error);
             }

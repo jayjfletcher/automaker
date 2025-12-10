@@ -20,6 +20,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Feature, useAppStore } from "@/store/app-store";
 import {
   GripVertical,
@@ -32,7 +38,7 @@ import {
   PlayCircle,
   RotateCcw,
   StopCircle,
-  FlaskConical,
+  Hand,
   ArrowLeft,
   MessageSquare,
   GitCommit,
@@ -41,6 +47,8 @@ import {
   ListTodo,
   Sparkles,
   Expand,
+  FileText,
+  MoreVertical,
 } from "lucide-react";
 import { CountUpTimer } from "@/components/ui/count-up-timer";
 import { getElectronAPI } from "@/lib/electron";
@@ -101,9 +109,6 @@ export function KanbanCard({
     kanbanCardDetailLevel === "standard" ||
     kanbanCardDetailLevel === "detailed";
   const showAgentInfo = kanbanCardDetailLevel === "detailed";
-  const showProgressBar =
-    kanbanCardDetailLevel === "standard" ||
-    kanbanCardDetailLevel === "detailed";
 
   // Load context file for in_progress, waiting_approval, and verified features
   useEffect(() => {
@@ -219,17 +224,14 @@ export function KanbanCard({
           data-testid={`skip-tests-badge-${feature.id}`}
           title="Manual verification required"
         >
-          <FlaskConical className="w-3 h-3" />
+          <Hand className="w-3 h-3" />
           <span>Manual</span>
         </div>
       )}
       <CardHeader className="p-3 pb-2">
         {isCurrentAutoTask && (
-          <div className="absolute top-2 right-2 flex items-center gap-2 bg-running-indicator/20 border border-running-indicator rounded px-2 py-0.5">
+          <div className="absolute top-2 right-2 flex items-center justify-center gap-2 bg-running-indicator/20 border border-running-indicator rounded px-2 py-0.5">
             <Loader2 className="w-4 h-4 text-running-indicator animate-spin" />
-            <span className="text-xs text-running-indicator font-medium">
-              Running...
-            </span>
             {feature.startedAt && (
               <CountUpTimer
                 startedAt={feature.startedAt}
@@ -238,17 +240,36 @@ export function KanbanCard({
             )}
           </div>
         )}
-        {/* Show timer for in_progress cards that aren't currently running */}
-        {!isCurrentAutoTask &&
-          feature.status === "in_progress" &&
-          feature.startedAt && (
-            <div className="absolute top-2 right-2">
-              <CountUpTimer
-                startedAt={feature.startedAt}
-                className="text-yellow-500"
-              />
-            </div>
-          )}
+        {!isCurrentAutoTask && (
+          <div className="absolute top-2 right-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 hover:bg-white/10"
+                  onClick={(e) => e.stopPropagation()}
+                  data-testid={`menu-${feature.id}`}
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteClick(e as unknown as React.MouseEvent);
+                  }}
+                  data-testid={`delete-feature-${feature.id}`}
+                >
+                  <Trash2 className="w-3 h-3 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
         <div className="flex items-start gap-2">
           {isDraggable && (
             <div
@@ -295,29 +316,6 @@ export function KanbanCard({
         )}
 
         {/* Agent Info Panel - shows for in_progress, waiting_approval, verified */}
-        {/* Standard mode: Only show progress bar */}
-        {showProgressBar &&
-          !showAgentInfo &&
-          feature.status !== "backlog" &&
-          agentInfo &&
-          (isCurrentAutoTask || feature.status === "in_progress") && (
-            <div className="mb-3 space-y-1">
-              <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                <div
-                  className="w-full h-full bg-primary transition-transform duration-500 ease-out origin-left"
-                  style={{
-                    transform: `translateX(${
-                      agentInfo.progressPercentage - 100
-                    }%)`,
-                  }}
-                />
-              </div>
-              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                <span>{Math.round(agentInfo.progressPercentage)}%</span>
-              </div>
-            </div>
-          )}
-
         {/* Detailed mode: Show all agent info */}
         {showAgentInfo && feature.status !== "backlog" && agentInfo && (
           <div className="mb-3 space-y-2">
@@ -345,39 +343,6 @@ export function KanbanCard({
                 </div>
               )}
             </div>
-
-            {/* Progress Indicator */}
-            {(isCurrentAutoTask || feature.status === "in_progress") && (
-              <div className="space-y-1">
-                <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="w-full h-full bg-primary transition-transform duration-500 ease-out origin-left"
-                    style={{
-                      transform: `translateX(${
-                        agentInfo.progressPercentage - 100
-                      }%)`,
-                    }}
-                  />
-                </div>
-                <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <span className="flex items-center gap-1">
-                      <Wrench className="w-2.5 h-2.5" />
-                      {agentInfo.toolCallCount} tools
-                    </span>
-                    {agentInfo.lastToolUsed && (
-                      <span
-                        className="text-muted-foreground truncate max-w-[80px]"
-                        title={agentInfo.lastToolUsed}
-                      >
-                        {agentInfo.lastToolUsed}
-                      </span>
-                    )}
-                  </div>
-                  <span>{Math.round(agentInfo.progressPercentage)}%</span>
-                </div>
-              </div>
-            )}
 
             {/* Task List Progress (if todos found) */}
             {agentInfo.todos.length > 0 && (
@@ -498,8 +463,8 @@ export function KanbanCard({
                   }}
                   data-testid={`view-output-${feature.id}`}
                 >
-                  <Eye className="w-3 h-3 mr-1" />
-                  View Output
+                  <FileText className="w-3 h-3 mr-1" />
+                  Logs
                 </Button>
               )}
               {onForceStop && (
@@ -526,7 +491,7 @@ export function KanbanCard({
                 <Button
                   variant="default"
                   size="sm"
-                  className="flex-1 h-7 text-xs bg-action-verify hover:bg-action-verify-hover"
+                  className="flex-1 h-7 text-xs bg-primary hover:bg-primary/90"
                   onClick={(e) => {
                     e.stopPropagation();
                     onManualVerify();
@@ -576,23 +541,30 @@ export function KanbanCard({
                   }}
                   data-testid={`view-output-inprogress-${feature.id}`}
                 >
-                  <Eye className="w-3 h-3 mr-1" />
-                  Output
+                  <FileText className="w-3 h-3 mr-1" />
+                  Logs
                 </Button>
               )}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                onClick={handleDeleteClick}
-                data-testid={`delete-inprogress-feature-${feature.id}`}
-              >
-                <Trash2 className="w-3 h-3" />
-              </Button>
             </>
           )}
           {!isCurrentAutoTask && feature.status === "verified" && (
             <>
+              {/* Logs button if context exists */}
+              {hasContext && onViewOutput && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onViewOutput();
+                  }}
+                  data-testid={`view-output-verified-${feature.id}`}
+                >
+                  <FileText className="w-3 h-3 mr-1" />
+                  Logs
+                </Button>
+              )}
               {/* Move back button for skipTests verified features */}
               {feature.skipTests && onMoveBackToInProgress && (
                 <Button
@@ -622,25 +594,32 @@ export function KanbanCard({
                 <Edit className="w-3 h-3 mr-1" />
                 Edit
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                onClick={handleDeleteClick}
-                data-testid={`delete-feature-${feature.id}`}
-              >
-                <Trash2 className="w-3 h-3" />
-              </Button>
             </>
           )}
           {!isCurrentAutoTask && feature.status === "waiting_approval" && (
             <>
+              {/* Logs button if context exists */}
+              {hasContext && onViewOutput && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onViewOutput();
+                  }}
+                  data-testid={`view-output-waiting-${feature.id}`}
+                >
+                  <FileText className="w-3 h-3 mr-1" />
+                  Logs
+                </Button>
+              )}
               {/* Follow-up prompt button */}
               {onFollowUp && (
                 <Button
-                  variant="default"
+                  variant="secondary"
                   size="sm"
-                  className="flex-1 h-7 text-xs bg-action-followup hover:bg-action-followup-hover"
+                  className="flex-1 h-7 text-xs"
                   onClick={(e) => {
                     e.stopPropagation();
                     onFollowUp();
@@ -656,7 +635,7 @@ export function KanbanCard({
                 <Button
                   variant="default"
                   size="sm"
-                  className="flex-1 h-7 text-xs bg-action-commit hover:bg-action-commit-hover"
+                  className="flex-1 h-7 text-xs"
                   onClick={(e) => {
                     e.stopPropagation();
                     onCommit();
@@ -667,19 +646,25 @@ export function KanbanCard({
                   Commit
                 </Button>
               )}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                onClick={handleDeleteClick}
-                data-testid={`delete-waiting-feature-${feature.id}`}
-              >
-                <Trash2 className="w-3 h-3" />
-              </Button>
             </>
           )}
           {!isCurrentAutoTask && feature.status === "backlog" && (
             <>
+              {onViewOutput && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onViewOutput();
+                  }}
+                  data-testid={`view-logs-backlog-${feature.id}`}
+                >
+                  <FileText className="w-3 h-3 mr-1" />
+                  Logs
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -692,15 +677,6 @@ export function KanbanCard({
               >
                 <Edit className="w-3 h-3 mr-1" />
                 Edit
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                onClick={handleDeleteClick}
-                data-testid={`delete-feature-${feature.id}`}
-              >
-                <Trash2 className="w-3 h-3" />
               </Button>
             </>
           )}

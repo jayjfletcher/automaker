@@ -385,11 +385,11 @@ export function getLogTypeColors(type: LogEntryType): {
       };
     case "debug":
       return {
-        bg: "bg-purple-500/10",
-        border: "border-l-purple-500",
-        text: "text-purple-300",
-        icon: "text-purple-400",
-        badge: "bg-purple-500/20 text-purple-300",
+        bg: "bg-primary/10",
+        border: "border-l-primary",
+        text: "text-primary",
+        icon: "text-primary",
+        badge: "bg-primary/20 text-primary",
       };
     default:
       return {

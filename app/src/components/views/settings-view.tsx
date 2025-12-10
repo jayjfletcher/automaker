@@ -796,150 +796,162 @@ export function SettingsView() {
               <div className="space-y-3">
                 <Label className="text-foreground">Theme</Label>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <button
+                  <Button
+                    variant={theme === "dark" ? "secondary" : "outline"}
                     onClick={() => setTheme("dark")}
-                    className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg border transition-all ${
+                    className={`flex items-center justify-center gap-2 px-3 py-3 h-auto ${
                       theme === "dark"
-                        ? "bg-accent border-brand-500 text-foreground"
-                        : "bg-input border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                        ? "border-brand-500 ring-1 ring-brand-500/50"
+                        : ""
                     }`}
                     data-testid="dark-mode-button"
                   >
                     <Moon className="w-4 h-4" />
                     <span className="font-medium text-sm">Dark</span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant={theme === "light" ? "secondary" : "outline"}
                     onClick={() => setTheme("light")}
-                    className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg border transition-all ${
+                    className={`flex items-center justify-center gap-2 px-3 py-3 h-auto ${
                       theme === "light"
-                        ? "bg-accent border-brand-500 text-foreground"
-                        : "bg-input border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                        ? "border-brand-500 ring-1 ring-brand-500/50"
+                        : ""
                     }`}
                     data-testid="light-mode-button"
                   >
                     <Sun className="w-4 h-4" />
                     <span className="font-medium text-sm">Light</span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant={theme === "retro" ? "secondary" : "outline"}
                     onClick={() => setTheme("retro")}
-                    className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg border transition-all ${
+                    className={`flex items-center justify-center gap-2 px-3 py-3 h-auto ${
                       theme === "retro"
-                        ? "bg-accent border-brand-500 text-foreground"
-                        : "bg-input border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                        ? "border-brand-500 ring-1 ring-brand-500/50"
+                        : ""
                     }`}
                     data-testid="retro-mode-button"
                   >
                     <Terminal className="w-4 h-4" />
                     <span className="font-medium text-sm">Retro</span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant={theme === "dracula" ? "secondary" : "outline"}
                     onClick={() => setTheme("dracula")}
-                    className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg border transition-all ${
+                    className={`flex items-center justify-center gap-2 px-3 py-3 h-auto ${
                       theme === "dracula"
-                        ? "bg-accent border-brand-500 text-foreground"
-                        : "bg-input border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                        ? "border-brand-500 ring-1 ring-brand-500/50"
+                        : ""
                     }`}
                     data-testid="dracula-mode-button"
                   >
                     <Ghost className="w-4 h-4" />
                     <span className="font-medium text-sm">Dracula</span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant={theme === "nord" ? "secondary" : "outline"}
                     onClick={() => setTheme("nord")}
-                    className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg border transition-all ${
+                    className={`flex items-center justify-center gap-2 px-3 py-3 h-auto ${
                       theme === "nord"
-                        ? "bg-accent border-brand-500 text-foreground"
-                        : "bg-input border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                        ? "border-brand-500 ring-1 ring-brand-500/50"
+                        : ""
                     }`}
                     data-testid="nord-mode-button"
                   >
                     <Snowflake className="w-4 h-4" />
                     <span className="font-medium text-sm">Nord</span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant={theme === "monokai" ? "secondary" : "outline"}
                     onClick={() => setTheme("monokai")}
-                    className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg border transition-all ${
+                    className={`flex items-center justify-center gap-2 px-3 py-3 h-auto ${
                       theme === "monokai"
-                        ? "bg-accent border-brand-500 text-foreground"
-                        : "bg-input border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                        ? "border-brand-500 ring-1 ring-brand-500/50"
+                        : ""
                     }`}
                     data-testid="monokai-mode-button"
                   >
                     <Flame className="w-4 h-4" />
                     <span className="font-medium text-sm">Monokai</span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant={theme === "tokyonight" ? "secondary" : "outline"}
                     onClick={() => setTheme("tokyonight")}
-                    className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg border transition-all ${
+                    className={`flex items-center justify-center gap-2 px-3 py-3 h-auto ${
                       theme === "tokyonight"
-                        ? "bg-accent border-brand-500 text-foreground"
-                        : "bg-input border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                        ? "border-brand-500 ring-1 ring-brand-500/50"
+                        : ""
                     }`}
                     data-testid="tokyonight-mode-button"
                   >
                     <Sparkles className="w-4 h-4" />
                     <span className="font-medium text-sm">Tokyo Night</span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant={theme === "solarized" ? "secondary" : "outline"}
                     onClick={() => setTheme("solarized")}
-                    className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg border transition-all ${
+                    className={`flex items-center justify-center gap-2 px-3 py-3 h-auto ${
                       theme === "solarized"
-                        ? "bg-accent border-brand-500 text-foreground"
-                        : "bg-input border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                        ? "border-brand-500 ring-1 ring-brand-500/50"
+                        : ""
                     }`}
                     data-testid="solarized-mode-button"
                   >
                     <Eclipse className="w-4 h-4" />
                     <span className="font-medium text-sm">Solarized</span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant={theme === "gruvbox" ? "secondary" : "outline"}
                     onClick={() => setTheme("gruvbox")}
-                    className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg border transition-all ${
+                    className={`flex items-center justify-center gap-2 px-3 py-3 h-auto ${
                       theme === "gruvbox"
-                        ? "bg-accent border-brand-500 text-foreground"
-                        : "bg-input border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                        ? "border-brand-500 ring-1 ring-brand-500/50"
+                        : ""
                     }`}
                     data-testid="gruvbox-mode-button"
                   >
                     <Trees className="w-4 h-4" />
                     <span className="font-medium text-sm">Gruvbox</span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant={theme === "catppuccin" ? "secondary" : "outline"}
                     onClick={() => setTheme("catppuccin")}
-                    className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg border transition-all ${
+                    className={`flex items-center justify-center gap-2 px-3 py-3 h-auto ${
                       theme === "catppuccin"
-                        ? "bg-accent border-brand-500 text-foreground"
-                        : "bg-input border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                        ? "border-brand-500 ring-1 ring-brand-500/50"
+                        : ""
                     }`}
                     data-testid="catppuccin-mode-button"
                   >
                     <Cat className="w-4 h-4" />
                     <span className="font-medium text-sm">Catppuccin</span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant={theme === "onedark" ? "secondary" : "outline"}
                     onClick={() => setTheme("onedark")}
-                    className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg border transition-all ${
+                    className={`flex items-center justify-center gap-2 px-3 py-3 h-auto ${
                       theme === "onedark"
-                        ? "bg-accent border-brand-500 text-foreground"
-                        : "bg-input border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                        ? "border-brand-500 ring-1 ring-brand-500/50"
+                        : ""
                     }`}
                     data-testid="onedark-mode-button"
                   >
                     <Atom className="w-4 h-4" />
                     <span className="font-medium text-sm">One Dark</span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant={theme === "synthwave" ? "secondary" : "outline"}
                     onClick={() => setTheme("synthwave")}
-                    className={`flex items-center justify-center gap-2 px-3 py-3 rounded-lg border transition-all ${
+                    className={`flex items-center justify-center gap-2 px-3 py-3 h-auto ${
                       theme === "synthwave"
-                        ? "bg-accent border-brand-500 text-foreground"
-                        : "bg-input border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                        ? "border-brand-500 ring-1 ring-brand-500/50"
+                        : ""
                     }`}
                     data-testid="synthwave-mode-button"
                   >
                     <Radio className="w-4 h-4" />
                     <span className="font-medium text-sm">Synthwave</span>
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -962,12 +974,13 @@ export function SettingsView() {
               <div className="space-y-3">
                 <Label className="text-foreground">Detail Level</Label>
                 <div className="grid grid-cols-3 gap-3">
-                  <button
+                  <Button
+                    variant={kanbanCardDetailLevel === "minimal" ? "secondary" : "outline"}
                     onClick={() => setKanbanCardDetailLevel("minimal")}
-                    className={`flex flex-col items-center justify-center gap-2 px-4 py-4 rounded-lg border transition-all ${
+                    className={`flex flex-col items-center justify-center gap-2 px-4 py-4 h-auto ${
                       kanbanCardDetailLevel === "minimal"
-                        ? "bg-accent border-brand-500 text-foreground"
-                        : "bg-input border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                        ? "border-brand-500 ring-1 ring-brand-500/50"
+                        : ""
                     }`}
                     data-testid="kanban-detail-minimal"
                   >
@@ -976,13 +989,14 @@ export function SettingsView() {
                     <span className="text-xs text-muted-foreground text-center">
                       Title & category only
                     </span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant={kanbanCardDetailLevel === "standard" ? "secondary" : "outline"}
                     onClick={() => setKanbanCardDetailLevel("standard")}
-                    className={`flex flex-col items-center justify-center gap-2 px-4 py-4 rounded-lg border transition-all ${
+                    className={`flex flex-col items-center justify-center gap-2 px-4 py-4 h-auto ${
                       kanbanCardDetailLevel === "standard"
-                        ? "bg-accent border-brand-500 text-foreground"
-                        : "bg-input border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                        ? "border-brand-500 ring-1 ring-brand-500/50"
+                        : ""
                     }`}
                     data-testid="kanban-detail-standard"
                   >
@@ -991,13 +1005,14 @@ export function SettingsView() {
                     <span className="text-xs text-muted-foreground text-center">
                       Steps & progress
                     </span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant={kanbanCardDetailLevel === "detailed" ? "secondary" : "outline"}
                     onClick={() => setKanbanCardDetailLevel("detailed")}
-                    className={`flex flex-col items-center justify-center gap-2 px-4 py-4 rounded-lg border transition-all ${
+                    className={`flex flex-col items-center justify-center gap-2 px-4 py-4 h-auto ${
                       kanbanCardDetailLevel === "detailed"
-                        ? "bg-accent border-brand-500 text-foreground"
-                        : "bg-input border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                        ? "border-brand-500 ring-1 ring-brand-500/50"
+                        : ""
                     }`}
                     data-testid="kanban-detail-detailed"
                   >
@@ -1006,7 +1021,7 @@ export function SettingsView() {
                     <span className="text-xs text-muted-foreground text-center">
                       Model, tools & tasks
                     </span>
-                  </button>
+                  </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   <strong>Minimal:</strong> Shows only title and category

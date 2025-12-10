@@ -1,2 +1,8 @@
 # Backup files - these are created automatically by the UpdateFeatureStatus tool
 feature_list.backup.json
+
+# Agent context files - created during feature execution
+agents-context/
+
+# Attached images - uploaded by users as feature context
+images/

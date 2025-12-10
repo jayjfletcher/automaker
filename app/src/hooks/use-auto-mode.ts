@@ -148,11 +148,11 @@ export function useAutoMode() {
         throw new Error("Auto mode API not available");
       }
 
-      const result = await api.autoMode.start(currentProject.path);
+      const result = await api.autoMode.start(currentProject.path, maxConcurrency);
 
       if (result.success) {
         setAutoModeRunning(true);
-        console.log("[AutoMode] Started successfully");
+        console.log(`[AutoMode] Started successfully with maxConcurrency: ${maxConcurrency}`);
       } else {
         console.error("[AutoMode] Failed to start:", result.error);
         throw new Error(result.error || "Failed to start auto mode");
@@ -162,7 +162,7 @@ export function useAutoMode() {
       setAutoModeRunning(false);
       throw error;
     }
-  }, [currentProject, setAutoModeRunning]);
+  }, [currentProject, setAutoModeRunning, maxConcurrency]);
 
   // Stop auto mode
   const stop = useCallback(async () => {

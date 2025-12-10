@@ -53,7 +53,6 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { KanbanColumn } from "./kanban-column";
 import { KanbanCard } from "./kanban-card";
-import { AutoModeLog } from "./auto-mode-log";
 import { AgentOutputModal } from "./agent-output-modal";
 import {
   Plus,
@@ -61,8 +60,6 @@ import {
   Play,
   StopCircle,
   Loader2,
-  ChevronUp,
-  ChevronDown,
   Users,
   Trash2,
   FastForward,
@@ -186,7 +183,6 @@ export function BoardView() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
-  const [showActivityLog, setShowActivityLog] = useState(false);
   const [showOutputModal, setShowOutputModal] = useState(false);
   const [outputFeature, setOutputFeature] = useState<Feature | null>(null);
   const [featuresWithContext, setFeaturesWithContext] = useState<Set<string>>(
@@ -420,12 +416,6 @@ export function BoardView() {
     }
   }, [showAddDialog, defaultSkipTests]);
 
-  // Auto-show activity log when auto mode starts
-  useEffect(() => {
-    if (autoMode.isRunning && !showActivityLog) {
-      setShowActivityLog(true);
-    }
-  }, [autoMode.isRunning, showActivityLog]);
 
   // Listen for auto mode feature completion and reload features
   useEffect(() => {
@@ -486,11 +476,12 @@ export function BoardView() {
   // Check which features have context files
   useEffect(() => {
     const checkAllContexts = async () => {
-      const inProgressFeatures = features.filter(
-        (f) => f.status === "in_progress"
+      // Check context for in_progress, waiting_approval, and verified features
+      const featuresWithPotentialContext = features.filter(
+        (f) => f.status === "in_progress" || f.status === "waiting_approval" || f.status === "verified"
       );
       const contextChecks = await Promise.all(
-        inProgressFeatures.map(async (f) => ({
+        featuresWithPotentialContext.map(async (f) => ({
           id: f.id,
           hasContext: await checkContextExists(f.id),
         }))
@@ -751,6 +742,36 @@ export function BoardView() {
         toast.error("Failed to stop agent", {
           description: "The feature will still be deleted.",
         });
+      }
+    }
+
+    // Delete agent context file if it exists
+    if (currentProject) {
+      try {
+        const api = getElectronAPI();
+        const contextPath = `${currentProject.path}/.automaker/agents-context/${featureId}.md`;
+        await api.deleteFile(contextPath);
+        console.log(`[Board] Deleted agent context for feature ${featureId}`);
+      } catch (error) {
+        // Context file might not exist, which is fine
+        console.log(`[Board] Context file not found or already deleted for feature ${featureId}`);
+      }
+    }
+
+    // Delete attached images if they exist
+    if (feature.imagePaths && feature.imagePaths.length > 0) {
+      try {
+        const api = getElectronAPI();
+        for (const imagePathObj of feature.imagePaths) {
+          try {
+            await api.deleteFile(imagePathObj.path);
+            console.log(`[Board] Deleted image: ${imagePathObj.path}`);
+          } catch (error) {
+            console.error(`[Board] Failed to delete image ${imagePathObj.path}:`, error);
+          }
+        }
+      } catch (error) {
+        console.error(`[Board] Error deleting images for feature ${featureId}:`, error);
       }
     }
 
@@ -1308,23 +1329,6 @@ export function BoardView() {
             </>
           )}
 
-          {isMounted && autoMode.isRunning && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowActivityLog(!showActivityLog)}
-              data-testid="toggle-activity-log"
-            >
-              <Loader2 className="w-4 h-4 mr-2 animate-spin text-purple-500" />
-              Activity
-              {showActivityLog ? (
-                <ChevronDown className="w-4 h-4 ml-2" />
-              ) : (
-                <ChevronUp className="w-4 h-4 ml-2" />
-              )}
-            </Button>
-          )}
-
           <Button
             size="sm"
             onClick={() => setShowAddDialog(true)}
@@ -1345,12 +1349,7 @@ export function BoardView() {
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Kanban Columns */}
-        <div
-          className={cn(
-            "flex-1 overflow-x-auto p-4",
-            showActivityLog && "transition-all"
-          )}
-        >
+        <div className="flex-1 overflow-x-auto p-4">
           <DndContext
             sensors={sensors}
             collisionDetection={collisionDetectionStrategy}
@@ -1453,13 +1452,6 @@ export function BoardView() {
             </DragOverlay>
           </DndContext>
         </div>
-
-        {/* Activity Log Panel */}
-        {showActivityLog && (
-          <div className="w-96 border-l border-border flex-shrink-0">
-            <AutoModeLog onClose={() => setShowActivityLog(false)} />
-          </div>
-        )}
       </div>
 
       {/* Add Feature Dialog */}
@@ -1995,6 +1987,8 @@ export function BoardView() {
               variant="destructive"
               onClick={async () => {
                 const verifiedFeatures = getColumnFeatures("verified");
+                const api = getElectronAPI();
+
                 for (const feature of verifiedFeatures) {
                   // Check if the feature is currently running
                   const isRunning = runningAutoTasks.includes(feature.id);
@@ -2009,6 +2003,16 @@ export function BoardView() {
                         error
                       );
                     }
+                  }
+
+                  // Delete agent context file if it exists
+                  try {
+                    const contextPath = `${currentProject.path}/.automaker/agents-context/${feature.id}.md`;
+                    await api.deleteFile(contextPath);
+                    console.log(`[Board] Deleted agent context for feature ${feature.id}`);
+                  } catch (error) {
+                    // Context file might not exist, which is fine
+                    console.debug("[Board] No context file to delete for feature:", feature.id);
                   }
 
                   // Remove the feature

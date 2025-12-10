@@ -21,6 +21,9 @@ class AutoModeService {
     this.runningFeatures = new Map(); // featureId -> { abortController, query, projectPath, sendToRenderer }
     this.autoLoopRunning = false; // Separate flag for the auto loop
     this.autoLoopAbortController = null;
+    this.autoLoopInterval = null; // Timer for periodic checking
+    this.checkIntervalMs = 5000; // Check every 5 seconds
+    this.maxConcurrency = 3; // Default max concurrency
   }
 
   /**
@@ -40,20 +43,20 @@ class AutoModeService {
   /**
    * Start auto mode - continuously implement features
    */
-  async start({ projectPath, sendToRenderer }) {
+  async start({ projectPath, sendToRenderer, maxConcurrency }) {
     if (this.autoLoopRunning) {
       throw new Error("Auto mode loop is already running");
     }
 
     this.autoLoopRunning = true;
+    this.maxConcurrency = maxConcurrency || 3;
 
-    console.log("[AutoMode] Starting auto mode for project:", projectPath);
+    console.log(
+      `[AutoMode] Starting auto mode for project: ${projectPath} with max concurrency: ${this.maxConcurrency}`
+    );
 
-    // Run the autonomous loop
-    this.runLoop(projectPath, sendToRenderer).catch((error) => {
-      console.error("[AutoMode] Loop error:", error);
-      this.stop();
-    });
+    // Start the periodic checking loop
+    this.runPeriodicLoop(projectPath, sendToRenderer);
 
     return { success: true };
   }
@@ -65,6 +68,12 @@ class AutoModeService {
     console.log("[AutoMode] Stopping auto mode");
 
     this.autoLoopRunning = false;
+
+    // Clear the interval timer
+    if (this.autoLoopInterval) {
+      clearInterval(this.autoLoopInterval);
+      this.autoLoopInterval = null;
+    }
 
     // Abort auto loop if running
     if (this.autoLoopAbortController) {
@@ -160,10 +169,7 @@ class AutoModeService {
         projectPath
       );
 
-      // Delete context file only if verified (not for waiting_approval)
-      if (newStatus === "verified") {
-        await contextManager.deleteContextFile(projectPath, feature.id);
-      }
+      // Keep context file for viewing output later (deleted only when card is removed)
 
       sendToRenderer({
         type: "auto_mode_feature_complete",
@@ -242,10 +248,7 @@ class AutoModeService {
         projectPath
       );
 
-      // Delete context file if verified
-      if (newStatus === "verified") {
-        await contextManager.deleteContextFile(projectPath, featureId);
-      }
+      // Keep context file for viewing output later (deleted only when card is removed)
 
       sendToRenderer({
         type: "auto_mode_feature_complete",
@@ -385,10 +388,7 @@ class AutoModeService {
         projectPath
       );
 
-      // Delete context file only if verified (not for waiting_approval)
-      if (newStatus === "verified") {
-        await contextManager.deleteContextFile(projectPath, featureId);
-      }
+      // Keep context file for viewing output later (deleted only when card is removed)
 
       sendToRenderer({
         type: "auto_mode_feature_complete",
@@ -413,114 +413,146 @@ class AutoModeService {
   }
 
   /**
-   * Main autonomous loop - picks and implements features
+   * New periodic loop - checks available slots and starts features up to max concurrency
+   * This loop continues running even if there are no backlog items
    */
-  async runLoop(projectPath, sendToRenderer) {
-    while (this.autoLoopRunning) {
-      let currentFeatureId = null;
-      try {
-        // Load features from .automaker/feature_list.json
-        const features = await featureLoader.loadFeatures(projectPath);
+  runPeriodicLoop(projectPath, sendToRenderer) {
+    console.log(
+      `[AutoMode] Starting periodic loop with interval: ${this.checkIntervalMs}ms`
+    );
 
-        // Find highest priority incomplete feature
-        const nextFeature = featureLoader.selectNextFeature(features);
+    // Initial check immediately
+    this.checkAndStartFeatures(projectPath, sendToRenderer);
 
-        if (!nextFeature) {
-          console.log("[AutoMode] No more features to implement");
-          sendToRenderer({
-            type: "auto_mode_complete",
-            message: "All features completed!",
-          });
-          break;
-        }
-
-        currentFeatureId = nextFeature.id;
-
-        // Skip if this feature is already running (via manual trigger)
-        if (this.runningFeatures.has(currentFeatureId)) {
-          console.log(
-            `[AutoMode] Skipping ${currentFeatureId} - already running`
-          );
-          await this.sleep(3000);
-          continue;
-        }
-
-        console.log(`[AutoMode] Selected feature: ${nextFeature.description}`);
-
-        sendToRenderer({
-          type: "auto_mode_feature_start",
-          featureId: nextFeature.id,
-          feature: nextFeature,
-        });
-
-        // Register this feature as running
-        const execution = this.createExecutionContext(currentFeatureId);
-        execution.projectPath = projectPath;
-        execution.sendToRenderer = sendToRenderer;
-        this.runningFeatures.set(currentFeatureId, execution);
-
-        // Implement the feature
-        const result = await featureExecutor.implementFeature(
-          nextFeature,
-          projectPath,
-          sendToRenderer,
-          execution
-        );
-
-        // Update feature status based on result
-        // For skipTests features, go to waiting_approval on success instead of verified
-        let newStatus;
-        if (result.passes) {
-          newStatus = nextFeature.skipTests ? "waiting_approval" : "verified";
-        } else {
-          newStatus = "backlog";
-        }
-        await featureLoader.updateFeatureStatus(
-          nextFeature.id,
-          newStatus,
-          projectPath
-        );
-
-        // Delete context file only if verified (not for waiting_approval)
-        if (newStatus === "verified") {
-          await contextManager.deleteContextFile(projectPath, nextFeature.id);
-        }
-
-        sendToRenderer({
-          type: "auto_mode_feature_complete",
-          featureId: nextFeature.id,
-          passes: result.passes,
-          message: result.message,
-        });
-
-        // Clean up
-        this.runningFeatures.delete(currentFeatureId);
-
-        // Small delay before next feature
-        if (this.autoLoopRunning) {
-          await this.sleep(3000);
-        }
-      } catch (error) {
-        console.error("[AutoMode] Error in loop iteration:", error);
-
-        sendToRenderer({
-          type: "auto_mode_error",
-          error: error.message,
-          featureId: currentFeatureId,
-        });
-
-        // Clean up on error
-        if (currentFeatureId) {
-          this.runningFeatures.delete(currentFeatureId);
-        }
-
-        // Wait before retrying
-        await this.sleep(5000);
+    // Then check periodically
+    this.autoLoopInterval = setInterval(() => {
+      if (this.autoLoopRunning) {
+        this.checkAndStartFeatures(projectPath, sendToRenderer);
       }
+    }, this.checkIntervalMs);
+  }
+
+  /**
+   * Check how many features are running and start new ones if under max concurrency
+   */
+  async checkAndStartFeatures(projectPath, sendToRenderer) {
+    try {
+      // Check how many are currently running
+      const currentRunningCount = this.runningFeatures.size;
+
+      console.log(
+        `[AutoMode] Checking features - Running: ${currentRunningCount}/${this.maxConcurrency}`
+      );
+
+      // Calculate available slots
+      const availableSlots = this.maxConcurrency - currentRunningCount;
+
+      if (availableSlots <= 0) {
+        console.log("[AutoMode] At max concurrency, waiting...");
+        return;
+      }
+
+      // Load features from backlog
+      const features = await featureLoader.loadFeatures(projectPath);
+      const backlogFeatures = features.filter((f) => f.status === "backlog");
+
+      if (backlogFeatures.length === 0) {
+        console.log("[AutoMode] No backlog features available, waiting...");
+        return;
+      }
+
+      // Grab up to availableSlots features from backlog
+      const featuresToStart = backlogFeatures.slice(0, availableSlots);
+
+      console.log(
+        `[AutoMode] Starting ${featuresToStart.length} feature(s) from backlog`
+      );
+
+      // Start each feature (don't await - run in parallel like drag operations)
+      for (const feature of featuresToStart) {
+        this.startFeatureAsync(feature, projectPath, sendToRenderer);
+      }
+    } catch (error) {
+      console.error("[AutoMode] Error checking/starting features:", error);
+    }
+  }
+
+  /**
+   * Start a feature asynchronously (similar to drag operation)
+   */
+  async startFeatureAsync(feature, projectPath, sendToRenderer) {
+    const featureId = feature.id;
+
+    // Skip if already running
+    if (this.runningFeatures.has(featureId)) {
+      console.log(`[AutoMode] Feature ${featureId} already running, skipping`);
+      return;
     }
 
-    console.log("[AutoMode] Loop ended");
-    this.autoLoopRunning = false;
+    try {
+      console.log(
+        `[AutoMode] Starting feature: ${feature.description.slice(0, 50)}...`
+      );
+
+      // Register this feature as running
+      const execution = this.createExecutionContext(featureId);
+      execution.projectPath = projectPath;
+      execution.sendToRenderer = sendToRenderer;
+      this.runningFeatures.set(featureId, execution);
+
+      // Update status to in_progress with timestamp
+      await featureLoader.updateFeatureStatus(
+        featureId,
+        "in_progress",
+        projectPath
+      );
+
+      sendToRenderer({
+        type: "auto_mode_feature_start",
+        featureId: feature.id,
+        feature: feature,
+      });
+
+      // Implement the feature (this runs async in background)
+      const result = await featureExecutor.implementFeature(
+        feature,
+        projectPath,
+        sendToRenderer,
+        execution
+      );
+
+      // Update feature status based on result
+      let newStatus;
+      if (result.passes) {
+        newStatus = feature.skipTests ? "waiting_approval" : "verified";
+      } else {
+        newStatus = "backlog";
+      }
+      await featureLoader.updateFeatureStatus(
+        feature.id,
+        newStatus,
+        projectPath
+      );
+
+      // Keep context file for viewing output later (deleted only when card is removed)
+
+      sendToRenderer({
+        type: "auto_mode_feature_complete",
+        featureId: feature.id,
+        passes: result.passes,
+        message: result.message,
+      });
+    } catch (error) {
+      console.error(`[AutoMode] Error running feature ${featureId}:`, error);
+      sendToRenderer({
+        type: "auto_mode_error",
+        error: error.message,
+        featureId: featureId,
+      });
+    } finally {
+      // Clean up this feature's execution
+      this.runningFeatures.delete(featureId);
+    }
   }
 
   /**
@@ -719,10 +751,7 @@ class AutoModeService {
         projectPath
       );
 
-      // Delete context file if verified (only for non-skipTests)
-      if (newStatus === "verified") {
-        await contextManager.deleteContextFile(projectPath, feature.id);
-      }
+      // Keep context file for viewing output later (deleted only when card is removed)
 
       sendToRenderer({
         type: "auto_mode_feature_complete",
@@ -778,7 +807,7 @@ class AutoModeService {
       });
 
       // Run git commit via the agent
-      const commitResult = await featureExecutor.commitChangesOnly(
+      await featureExecutor.commitChangesOnly(
         feature,
         projectPath,
         sendToRenderer,
@@ -792,8 +821,7 @@ class AutoModeService {
         projectPath
       );
 
-      // Delete context file
-      await contextManager.deleteContextFile(projectPath, featureId);
+      // Keep context file for viewing output later (deleted only when card is removed)
 
       sendToRenderer({
         type: "auto_mode_feature_complete",

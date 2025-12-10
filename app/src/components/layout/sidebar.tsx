@@ -19,10 +19,10 @@ import {
   PanelLeft,
   PanelLeftClose,
   Sparkles,
-  Cpu,
   ChevronDown,
   Check,
   BookOpen,
+  GripVertical,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -37,9 +37,23 @@ import {
   ACTION_SHORTCUTS,
   KeyboardShortcut,
 } from "@/hooks/use-keyboard-shortcuts";
-import { getElectronAPI } from "@/lib/electron";
+import { getElectronAPI, Project } from "@/lib/electron";
 import { initializeProject } from "@/lib/project-init";
 import { toast } from "sonner";
+import {
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface NavSection {
   label?: string;
@@ -53,6 +67,81 @@ interface NavItem {
   shortcut?: string;
 }
 
+// Sortable Project Item Component
+interface SortableProjectItemProps {
+  project: Project;
+  index: number;
+  currentProjectId: string | undefined;
+  onSelect: (project: Project) => void;
+}
+
+function SortableProjectItem({
+  project,
+  index,
+  currentProjectId,
+  onSelect,
+}: SortableProjectItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: project.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer text-muted-foreground hover:text-foreground hover:bg-accent",
+        isDragging && "bg-accent shadow-lg"
+      )}
+      data-testid={`project-option-${project.id}`}
+    >
+      {/* Drag Handle */}
+      <button
+        {...attributes}
+        {...listeners}
+        className="p-0.5 rounded hover:bg-sidebar-accent/20 cursor-grab active:cursor-grabbing"
+        data-testid={`project-drag-handle-${project.id}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+      </button>
+
+      {/* Hotkey indicator */}
+      {index < 9 && (
+        <span
+          className="flex items-center justify-center w-5 h-5 text-[10px] font-mono rounded bg-sidebar-accent/10 border border-sidebar-border text-muted-foreground"
+          data-testid={`project-hotkey-${index + 1}`}
+        >
+          {index + 1}
+        </span>
+      )}
+
+      {/* Project content - clickable area */}
+      <div
+        className="flex items-center gap-2 flex-1 min-w-0"
+        onClick={() => onSelect(project)}
+      >
+        <Folder className="h-4 w-4 shrink-0" />
+        <span className="flex-1 truncate text-sm">{project.name}</span>
+        {currentProjectId === project.id && (
+          <Check className="h-4 w-4 text-brand-500 shrink-0" />
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function Sidebar() {
   const {
     projects,
@@ -64,10 +153,37 @@ export function Sidebar() {
     setCurrentView,
     toggleSidebar,
     removeProject,
+    reorderProjects,
   } = useAppStore();
 
   // State for project picker dropdown
   const [isProjectPickerOpen, setIsProjectPickerOpen] = useState(false);
+
+  // Sensors for drag-and-drop
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5, // Small distance to start drag
+      },
+    })
+  );
+
+  // Handle drag end for reordering projects
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+
+      if (over && active.id !== over.id) {
+        const oldIndex = projects.findIndex((p) => p.id === active.id);
+        const newIndex = projects.findIndex((p) => p.id === over.id);
+
+        if (oldIndex !== -1 && newIndex !== -1) {
+          reorderProjects(oldIndex, newIndex);
+        }
+      }
+    },
+    [projects, reorderProjects]
+  );
 
   /**
    * Opens the system folder selection dialog and initializes the selected project.
@@ -312,8 +428,12 @@ export function Sidebar() {
             onClick={() => setCurrentView("welcome")}
             data-testid="logo-button"
           >
-            <div className="relative flex items-center justify-center w-8 h-8 bg-linear-to-br from-brand-500 to-brand-600 rounded-lg shadow-lg shadow-brand-500/20 group">
-              <Cpu className="text-primary-foreground w-5 h-5 group-hover:rotate-12 transition-transform" />
+            <div className="relative flex items-center justify-center w-8 h-8 rounded-lg group">
+              <img
+                src="/icon_gold.png"
+                alt="Automaker Logo"
+                className="w-8 h-8 group-hover:rotate-12 transition-transform"
+              />
             </div>
             <span
               className={cn(
@@ -387,35 +507,33 @@ export function Sidebar() {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
-                className="w-56 bg-popover border-border"
+                className="w-64 bg-popover border-border p-1"
                 align="start"
                 data-testid="project-picker-dropdown"
               >
-                {projects.map((project, index) => (
-                  <DropdownMenuItem
-                    key={project.id}
-                    onClick={() => {
-                      setCurrentProject(project);
-                      setIsProjectPickerOpen(false);
-                    }}
-                    className="flex items-center gap-2 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-accent"
-                    data-testid={`project-option-${project.id}`}
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={projects.map((p) => p.id)}
+                    strategy={verticalListSortingStrategy}
                   >
-                    {index < 9 && (
-                      <span
-                        className="flex items-center justify-center w-5 h-5 text-[10px] font-mono rounded bg-sidebar-accent/10 border border-sidebar-border text-muted-foreground"
-                        data-testid={`project-hotkey-${index + 1}`}
-                      >
-                        {index + 1}
-                      </span>
-                    )}
-                    <Folder className="h-4 w-4" />
-                    <span className="flex-1 truncate">{project.name}</span>
-                    {currentProject?.id === project.id && (
-                      <Check className="h-4 w-4 text-brand-500" />
-                    )}
-                  </DropdownMenuItem>
-                ))}
+                    {projects.map((project, index) => (
+                      <SortableProjectItem
+                        key={project.id}
+                        project={project}
+                        index={index}
+                        currentProjectId={currentProject?.id}
+                        onSelect={(p) => {
+                          setCurrentProject(p);
+                          setIsProjectPickerOpen(false);
+                        }}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

@@ -10,6 +10,10 @@ class PromptBuilder {
       ? `\n**⚠️ IMPORTANT - Manual Testing Mode:**\nThis feature has skipTests=true, which means:\n- DO NOT commit changes automatically\n- DO NOT mark as verified - it will automatically go to "waiting_approval" status\n- The user will manually review and commit the changes\n- Just implement the feature and mark it as verified (it will be converted to waiting_approval)\n`
       : "";
 
+    const imagesNote = feature.imagePaths && feature.imagePaths.length > 0
+      ? `\n**📎 Context Images Attached:**\nThe user has attached ${feature.imagePaths.length} image(s) for context. These images will be provided to you visually to help understand the requirements. Review them carefully before implementing.\n`
+      : "";
+
     return `You are working on a feature implementation task.
 
 **Current Feature to Implement:**
@@ -17,7 +21,7 @@ class PromptBuilder {
 ID: ${feature.id}
 Category: ${feature.category}
 Description: ${feature.description}
-${skipTestsNote}
+${skipTestsNote}${imagesNote}
 **Steps to Complete:**
 ${feature.steps.map((step, i) => `${i + 1}. ${step}`).join("\n")}
 
@@ -117,6 +121,10 @@ Begin by reading the project structure and then implementing the feature.`;
       ? `\n**⚠️ IMPORTANT - Manual Testing Mode:**\nThis feature has skipTests=true, which means:\n- DO NOT commit changes automatically\n- DO NOT mark as verified - it will automatically go to "waiting_approval" status\n- The user will manually review and commit the changes\n- Just implement the feature and mark it as verified (it will be converted to waiting_approval)\n`
       : "";
 
+    const imagesNote = feature.imagePaths && feature.imagePaths.length > 0
+      ? `\n**📎 Context Images Attached:**\nThe user has attached ${feature.imagePaths.length} image(s) for context. These images will be provided to you visually to help understand the requirements. Review them carefully before implementing.\n`
+      : "";
+
     return `You are implementing and verifying a feature until it is complete and working correctly.
 
 **Feature to Implement/Verify:**
@@ -125,7 +133,7 @@ ID: ${feature.id}
 Category: ${feature.category}
 Description: ${feature.description}
 Current Status: ${feature.status}
-${skipTestsNote}
+${skipTestsNote}${imagesNote}
 **Steps that should be implemented:**
 ${feature.steps.map((step, i) => `${i + 1}. ${step}`).join("\n")}
 
@@ -216,6 +224,10 @@ Begin by reading the project structure and understanding what needs to be implem
       ? `\n**⚠️ IMPORTANT - Manual Testing Mode:**\nThis feature has skipTests=true, which means:\n- DO NOT commit changes automatically\n- DO NOT mark as verified - it will automatically go to "waiting_approval" status\n- The user will manually review and commit the changes\n- Just implement the feature and mark it as verified (it will be converted to waiting_approval)\n`
       : "";
 
+    const imagesNote = feature.imagePaths && feature.imagePaths.length > 0
+      ? `\n**📎 Context Images Attached:**\nThe user has attached ${feature.imagePaths.length} image(s) for context. These images will be provided to you visually to help understand the requirements. Review them carefully.\n`
+      : "";
+
     return `You are resuming work on a feature implementation that was previously started.
 
 **Current Feature:**
@@ -223,7 +235,7 @@ Begin by reading the project structure and understanding what needs to be implem
 ID: ${feature.id}
 Category: ${feature.category}
 Description: ${feature.description}
-${skipTestsNote}
+${skipTestsNote}${imagesNote}
 **Steps to Complete:**
 ${feature.steps.map((step, i) => `${i + 1}. ${step}`).join("\n")}
 

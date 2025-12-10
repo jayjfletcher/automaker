@@ -5,11 +5,19 @@ require("dotenv").config({ path: path.join(__dirname, "../.env") });
 
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const fs = require("fs/promises");
-const os = require("os");
 const agentService = require("./agent-service");
 const autoModeService = require("./auto-mode-service");
 
 let mainWindow = null;
+
+// Get icon path - works in both dev and production
+function getIconPath() {
+  // In dev: __dirname is electron/, so ../public/icon_gold.png
+  // In production: public folder is included in the app bundle
+  return app.isPackaged
+    ? path.join(process.resourcesPath, "app", "public", "icon_gold.png")
+    : path.join(__dirname, "../public/icon_gold.png");
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -17,6 +25,7 @@ function createWindow() {
     height: 900,
     minWidth: 1024,
     minHeight: 700,
+    icon: getIconPath(),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -41,6 +50,11 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  // Set app icon (dock icon on macOS)
+  if (process.platform === "darwin" && app.dock) {
+    app.dock.setIcon(getIconPath());
+  }
+
   // Initialize agent service
   const appDataPath = app.getPath("userData");
   await agentService.initialize(appDataPath);
@@ -160,32 +174,43 @@ ipcMain.handle("app:getPath", (_, name) => {
   return app.getPath(name);
 });
 
-// Save image to temp directory
-ipcMain.handle("app:saveImageToTemp", async (_, { data, filename, mimeType }) => {
-  try {
-    // Create temp directory for images if it doesn't exist
-    const tempDir = path.join(os.tmpdir(), "automaker-images");
-    await fs.mkdir(tempDir, { recursive: true });
+// Save image to .automaker/images directory
+ipcMain.handle(
+  "app:saveImageToTemp",
+  async (_, { data, filename, mimeType, projectPath }) => {
+    try {
+      // Use .automaker/images directory instead of /tmp
+      // If projectPath is provided, use it; otherwise fall back to app data directory
+      let imagesDir;
+      if (projectPath) {
+        imagesDir = path.join(projectPath, ".automaker", "images");
+      } else {
+        // Fallback for cases where project isn't loaded yet
+        const appDataPath = app.getPath("userData");
+        imagesDir = path.join(appDataPath, "images");
+      }
 
-    // Generate unique filename
-    const timestamp = Date.now();
-    const ext = mimeType.split("/")[1] || "png";
-    const safeName = filename.replace(/[^a-zA-Z0-9.-]/g, "_");
-    const tempFilePath = path.join(tempDir, `${timestamp}_${safeName}`);
+      await fs.mkdir(imagesDir, { recursive: true });
 
-    // Remove data URL prefix if present (data:image/png;base64,...)
-    const base64Data = data.includes(",") ? data.split(",")[1] : data;
+      // Generate unique filename with unique ID
+      const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+      const safeName = filename.replace(/[^a-zA-Z0-9.-]/g, "_");
+      const imageFilePath = path.join(imagesDir, `${uniqueId}_${safeName}`);
 
-    // Write image to temp file
-    await fs.writeFile(tempFilePath, base64Data, "base64");
+      // Remove data URL prefix if present (data:image/png;base64,...)
+      const base64Data = data.includes(",") ? data.split(",")[1] : data;
 
-    console.log("[IPC] Saved image to temp:", tempFilePath);
-    return { success: true, path: tempFilePath };
-  } catch (error) {
-    console.error("[IPC] Failed to save image to temp:", error);
-    return { success: false, error: error.message };
+      // Write image to file
+      await fs.writeFile(imageFilePath, base64Data, "base64");
+
+      console.log("[IPC] Saved image to .automaker/images:", imageFilePath);
+      return { success: true, path: imageFilePath };
+    } catch (error) {
+      console.error("[IPC] Failed to save image:", error);
+      return { success: false, error: error.message };
+    }
   }
-});
+);
 
 // IPC ping for testing communication
 ipcMain.handle("ping", () => {
@@ -201,7 +226,10 @@ ipcMain.handle("ping", () => {
  */
 ipcMain.handle("agent:start", async (_, { sessionId, workingDirectory }) => {
   try {
-    return await agentService.startConversation({ sessionId, workingDirectory });
+    return await agentService.startConversation({
+      sessionId,
+      workingDirectory,
+    });
   } catch (error) {
     console.error("[IPC] agent:start error:", error);
     return { success: false, error: error.message };
@@ -211,42 +239,45 @@ ipcMain.handle("agent:start", async (_, { sessionId, workingDirectory }) => {
 /**
  * Send a message to the agent - returns immediately, streams via events
  */
-ipcMain.handle("agent:send", async (event, { sessionId, message, workingDirectory, imagePaths }) => {
-  try {
-    // Create a function to send updates to the renderer
-    const sendToRenderer = (data) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("agent:stream", {
+ipcMain.handle(
+  "agent:send",
+  async (event, { sessionId, message, workingDirectory, imagePaths }) => {
+    try {
+      // Create a function to send updates to the renderer
+      const sendToRenderer = (data) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("agent:stream", {
+            sessionId,
+            ...data,
+          });
+        }
+      };
+
+      // Start processing (runs in background)
+      agentService
+        .sendMessage({
           sessionId,
-          ...data,
+          message,
+          workingDirectory,
+          imagePaths,
+          sendToRenderer,
+        })
+        .catch((error) => {
+          console.error("[IPC] agent:send background error:", error);
+          sendToRenderer({
+            type: "error",
+            error: error.message,
+          });
         });
-      }
-    };
 
-    // Start processing (runs in background)
-    agentService
-      .sendMessage({
-        sessionId,
-        message,
-        workingDirectory,
-        imagePaths,
-        sendToRenderer,
-      })
-      .catch((error) => {
-        console.error("[IPC] agent:send background error:", error);
-        sendToRenderer({
-          type: "error",
-          error: error.message,
-        });
-      });
-
-    // Return immediately
-    return { success: true };
-  } catch (error) {
-    console.error("[IPC] agent:send error:", error);
-    return { success: false, error: error.message };
+      // Return immediately
+      return { success: true };
+    } catch (error) {
+      console.error("[IPC] agent:send error:", error);
+      return { success: false, error: error.message };
+    }
   }
-});
+);
 
 /**
  * Get conversation history
@@ -304,14 +335,21 @@ ipcMain.handle("sessions:list", async (_, { includeArchived }) => {
 /**
  * Create a new session
  */
-ipcMain.handle("sessions:create", async (_, { name, projectPath, workingDirectory }) => {
-  try {
-    return await agentService.createSession({ name, projectPath, workingDirectory });
-  } catch (error) {
-    console.error("[IPC] sessions:create error:", error);
-    return { success: false, error: error.message };
+ipcMain.handle(
+  "sessions:create",
+  async (_, { name, projectPath, workingDirectory }) => {
+    try {
+      return await agentService.createSession({
+        name,
+        projectPath,
+        workingDirectory,
+      });
+    } catch (error) {
+      console.error("[IPC] sessions:create error:", error);
+      return { success: false, error: error.message };
+    }
   }
-});
+);
 
 /**
  * Update session metadata
@@ -368,20 +406,27 @@ ipcMain.handle("sessions:delete", async (_, { sessionId }) => {
 /**
  * Start auto mode - autonomous feature implementation
  */
-ipcMain.handle("auto-mode:start", async (_, { projectPath }) => {
-  try {
-    const sendToRenderer = (data) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("auto-mode:event", data);
-      }
-    };
+ipcMain.handle(
+  "auto-mode:start",
+  async (_, { projectPath, maxConcurrency }) => {
+    try {
+      const sendToRenderer = (data) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("auto-mode:event", data);
+        }
+      };
 
-    return await autoModeService.start({ projectPath, sendToRenderer });
-  } catch (error) {
-    console.error("[IPC] auto-mode:start error:", error);
-    return { success: false, error: error.message };
+      return await autoModeService.start({
+        projectPath,
+        sendToRenderer,
+        maxConcurrency,
+      });
+    } catch (error) {
+      console.error("[IPC] auto-mode:start error:", error);
+      return { success: false, error: error.message };
+    }
   }
-});
+);
 
 /**
  * Stop auto mode
@@ -410,76 +455,111 @@ ipcMain.handle("auto-mode:status", () => {
 /**
  * Run a specific feature
  */
-ipcMain.handle("auto-mode:run-feature", async (_, { projectPath, featureId }) => {
-  try {
-    const sendToRenderer = (data) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("auto-mode:event", data);
-      }
-    };
+ipcMain.handle(
+  "auto-mode:run-feature",
+  async (_, { projectPath, featureId }) => {
+    try {
+      const sendToRenderer = (data) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("auto-mode:event", data);
+        }
+      };
 
-    return await autoModeService.runFeature({ projectPath, featureId, sendToRenderer });
-  } catch (error) {
-    console.error("[IPC] auto-mode:run-feature error:", error);
-    return { success: false, error: error.message };
+      return await autoModeService.runFeature({
+        projectPath,
+        featureId,
+        sendToRenderer,
+      });
+    } catch (error) {
+      console.error("[IPC] auto-mode:run-feature error:", error);
+      return { success: false, error: error.message };
+    }
   }
-});
+);
 
 /**
  * Verify a specific feature by running its tests
  */
-ipcMain.handle("auto-mode:verify-feature", async (_, { projectPath, featureId }) => {
-  console.log("[IPC] auto-mode:verify-feature called with:", { projectPath, featureId });
-  try {
-    const sendToRenderer = (data) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("auto-mode:event", data);
-      }
-    };
+ipcMain.handle(
+  "auto-mode:verify-feature",
+  async (_, { projectPath, featureId }) => {
+    console.log("[IPC] auto-mode:verify-feature called with:", {
+      projectPath,
+      featureId,
+    });
+    try {
+      const sendToRenderer = (data) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("auto-mode:event", data);
+        }
+      };
 
-    return await autoModeService.verifyFeature({ projectPath, featureId, sendToRenderer });
-  } catch (error) {
-    console.error("[IPC] auto-mode:verify-feature error:", error);
-    return { success: false, error: error.message };
+      return await autoModeService.verifyFeature({
+        projectPath,
+        featureId,
+        sendToRenderer,
+      });
+    } catch (error) {
+      console.error("[IPC] auto-mode:verify-feature error:", error);
+      return { success: false, error: error.message };
+    }
   }
-});
+);
 
 /**
  * Resume a specific feature with previous context
  */
-ipcMain.handle("auto-mode:resume-feature", async (_, { projectPath, featureId }) => {
-  console.log("[IPC] auto-mode:resume-feature called with:", { projectPath, featureId });
-  try {
-    const sendToRenderer = (data) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("auto-mode:event", data);
-      }
-    };
+ipcMain.handle(
+  "auto-mode:resume-feature",
+  async (_, { projectPath, featureId }) => {
+    console.log("[IPC] auto-mode:resume-feature called with:", {
+      projectPath,
+      featureId,
+    });
+    try {
+      const sendToRenderer = (data) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("auto-mode:event", data);
+        }
+      };
 
-    return await autoModeService.resumeFeature({ projectPath, featureId, sendToRenderer });
-  } catch (error) {
-    console.error("[IPC] auto-mode:resume-feature error:", error);
-    return { success: false, error: error.message };
+      return await autoModeService.resumeFeature({
+        projectPath,
+        featureId,
+        sendToRenderer,
+      });
+    } catch (error) {
+      console.error("[IPC] auto-mode:resume-feature error:", error);
+      return { success: false, error: error.message };
+    }
   }
-});
+);
 
 /**
  * Check if a context file exists for a feature
  */
-ipcMain.handle("auto-mode:context-exists", async (_, { projectPath, featureId }) => {
-  try {
-    const contextPath = path.join(projectPath, ".automaker", "context", `${featureId}.md`);
+ipcMain.handle(
+  "auto-mode:context-exists",
+  async (_, { projectPath, featureId }) => {
     try {
-      await fs.access(contextPath);
-      return { success: true, exists: true };
-    } catch {
-      return { success: true, exists: false };
+      const contextPath = path.join(
+        projectPath,
+        ".automaker",
+        "context",
+        `${featureId}.md`
+      );
+      try {
+        await fs.access(contextPath);
+        return { success: true, exists: true };
+      } catch {
+        return { success: true, exists: false };
+      }
+    } catch (error) {
+      console.error("[IPC] auto-mode:context-exists error:", error);
+      return { success: false, error: error.message };
     }
-  } catch (error) {
-    console.error("[IPC] auto-mode:context-exists error:", error);
-    return { success: false, error: error.message };
   }
-});
+);
 
 /**
  * Analyze a new project - kicks off an agent to analyze the codebase
@@ -494,7 +574,10 @@ ipcMain.handle("auto-mode:analyze-project", async (_, { projectPath }) => {
       }
     };
 
-    return await autoModeService.analyzeProject({ projectPath, sendToRenderer });
+    return await autoModeService.analyzeProject({
+      projectPath,
+      sendToRenderer,
+    });
   } catch (error) {
     console.error("[IPC] auto-mode:analyze-project error:", error);
     return { success: false, error: error.message };
@@ -517,38 +600,62 @@ ipcMain.handle("auto-mode:stop-feature", async (_, { featureId }) => {
 /**
  * Follow-up on a feature with additional prompt
  */
-ipcMain.handle("auto-mode:follow-up-feature", async (_, { projectPath, featureId, prompt, imagePaths }) => {
-  console.log("[IPC] auto-mode:follow-up-feature called with:", { projectPath, featureId, prompt, imagePaths });
-  try {
-    const sendToRenderer = (data) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("auto-mode:event", data);
-      }
-    };
+ipcMain.handle(
+  "auto-mode:follow-up-feature",
+  async (_, { projectPath, featureId, prompt, imagePaths }) => {
+    console.log("[IPC] auto-mode:follow-up-feature called with:", {
+      projectPath,
+      featureId,
+      prompt,
+      imagePaths,
+    });
+    try {
+      const sendToRenderer = (data) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("auto-mode:event", data);
+        }
+      };
 
-    return await autoModeService.followUpFeature({ projectPath, featureId, prompt, imagePaths, sendToRenderer });
-  } catch (error) {
-    console.error("[IPC] auto-mode:follow-up-feature error:", error);
-    return { success: false, error: error.message };
+      return await autoModeService.followUpFeature({
+        projectPath,
+        featureId,
+        prompt,
+        imagePaths,
+        sendToRenderer,
+      });
+    } catch (error) {
+      console.error("[IPC] auto-mode:follow-up-feature error:", error);
+      return { success: false, error: error.message };
+    }
   }
-});
+);
 
 /**
  * Commit changes for a feature (no further work, just commit)
  */
-ipcMain.handle("auto-mode:commit-feature", async (_, { projectPath, featureId }) => {
-  console.log("[IPC] auto-mode:commit-feature called with:", { projectPath, featureId });
-  try {
-    const sendToRenderer = (data) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("auto-mode:event", data);
-      }
-    };
+ipcMain.handle(
+  "auto-mode:commit-feature",
+  async (_, { projectPath, featureId }) => {
+    console.log("[IPC] auto-mode:commit-feature called with:", {
+      projectPath,
+      featureId,
+    });
+    try {
+      const sendToRenderer = (data) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("auto-mode:event", data);
+        }
+      };
 
-    return await autoModeService.commitFeature({ projectPath, featureId, sendToRenderer });
-  } catch (error) {
-    console.error("[IPC] auto-mode:commit-feature error:", error);
-    return { success: false, error: error.message };
+      return await autoModeService.commitFeature({
+        projectPath,
+        featureId,
+        sendToRenderer,
+      });
+    } catch (error) {
+      console.error("[IPC] auto-mode:commit-feature error:", error);
+      return { success: false, error: error.message };
+    }
   }
 });
 

@@ -237,13 +237,13 @@ export function AgentOutputModal({
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent
-        className="max-w-4xl max-h-[80vh] flex flex-col"
+        className="w-[90vw] max-w-[90vw] max-h-[80vh] flex flex-col"
         data-testid="agent-output-modal"
       >
         <DialogHeader className="flex-shrink-0">
           <div className="flex items-center justify-between">
             <DialogTitle className="flex items-center gap-2">
-              <Loader2 className="w-5 h-5 text-purple-500 animate-spin" />
+              <Loader2 className="w-5 h-5 text-primary animate-spin" />
               Agent Output
             </DialogTitle>
             <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
@@ -251,7 +251,7 @@ export function AgentOutputModal({
                 onClick={() => setViewMode("parsed")}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   viewMode === "parsed"
-                    ? "bg-purple-500/20 text-purple-300 shadow-sm"
+                    ? "bg-primary/20 text-primary shadow-sm"
                     : "text-muted-foreground hover:text-foreground hover:bg-accent"
                 }`}
                 data-testid="view-mode-parsed"
@@ -263,7 +263,7 @@ export function AgentOutputModal({
                 onClick={() => setViewMode("raw")}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   viewMode === "raw"
-                    ? "bg-purple-500/20 text-purple-300 shadow-sm"
+                    ? "bg-primary/20 text-primary shadow-sm"
                     : "text-muted-foreground hover:text-foreground hover:bg-accent"
                 }`}
                 data-testid="view-mode-raw"
@@ -284,7 +284,7 @@ export function AgentOutputModal({
         <div
           ref={scrollRef}
           onScroll={handleScroll}
-          className="flex-1 overflow-y-auto bg-zinc-950 rounded-lg p-4 font-mono text-sm min-h-[400px] max-h-[60vh]"
+          className="flex-1 overflow-y-auto bg-zinc-950 rounded-lg p-4 font-mono text-xs min-h-[400px] max-h-[60vh]"
         >
           {isLoading && !output ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">

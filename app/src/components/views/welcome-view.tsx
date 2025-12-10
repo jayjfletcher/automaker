@@ -25,7 +25,6 @@ import { initializeProject } from "@/lib/project-init";
 import {
   FolderOpen,
   Plus,
-  Cpu,
   Folder,
   Clock,
   Sparkles,
@@ -284,8 +283,12 @@ export function WelcomeView() {
       <div className="flex-shrink-0 border-b border-border bg-glass backdrop-blur-md">
         <div className="px-8 py-6">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-linear-to-br from-brand-500 to-brand-600 shadow-lg shadow-brand-500/20 flex items-center justify-center">
-              <Cpu className="w-5 h-5 text-primary-foreground" />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center">
+              <img
+                src="/icon_gold.png"
+                alt="Automaker Logo"
+                className="w-10 h-10"
+              />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-foreground">
