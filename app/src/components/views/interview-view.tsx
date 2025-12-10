@@ -100,9 +100,10 @@ export function InterviewView() {
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout | undefined;
     if (messagesContainerRef.current) {
       // Use a small delay to ensure DOM is updated
-      setTimeout(() => {
+      timeoutId = setTimeout(() => {
         if (messagesContainerRef.current) {
           messagesContainerRef.current.scrollTo({
             top: messagesContainerRef.current.scrollHeight,
@@ -111,6 +112,11 @@ export function InterviewView() {
         }
       }, 100);
     }
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [messages]);
 
   // Auto-focus input
