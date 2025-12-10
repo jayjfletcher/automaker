@@ -10,14 +10,11 @@ import {
   FileText,
   LayoutGrid,
   Bot,
-  ChevronLeft,
-  ChevronRight,
   Folder,
   X,
   Wrench,
   PanelLeft,
   PanelLeftClose,
-  Sparkles,
   ChevronDown,
   Check,
   BookOpen,
@@ -28,9 +25,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
@@ -84,7 +79,6 @@ interface SortableProjectItemProps {
   index: number;
   currentProjectId: string | undefined;
   onSelect: (project: Project) => void;
-  onTrash: (project: Project) => void;
 }
 
 function SortableProjectItem({
@@ -92,7 +86,6 @@ function SortableProjectItem({
   index,
   currentProjectId,
   onSelect,
-  onTrash,
 }: SortableProjectItemProps) {
   const {
     attributes,
@@ -151,19 +144,6 @@ function SortableProjectItem({
           <Check className="h-4 w-4 text-brand-500 shrink-0" />
         )}
       </div>
-
-      {/* Move to trash */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onTrash(project);
-        }}
-        className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-        title="Move to Trash"
-        data-testid={`project-trash-${project.id}`}
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </button>
     </div>
   );
 }
@@ -179,7 +159,6 @@ export function Sidebar() {
     setCurrentProject,
     setCurrentView,
     toggleSidebar,
-    moveProjectToTrash,
     restoreTrashedProject,
     deleteTrashedProject,
     emptyTrash,
@@ -271,22 +250,6 @@ export function Sidebar() {
       }
     }
   }, [addProject, setCurrentProject]);
-
-  const handleTrashProject = useCallback(
-    (project: Project) => {
-      const confirmed = window.confirm(
-        `Move "${project.name}" to Trash?\nThe folder stays on disk until you delete it from Trash.`
-      );
-      if (!confirmed) return;
-
-      moveProjectToTrash(project.id);
-      setIsProjectPickerOpen(false);
-      toast.success("Project moved to Trash", {
-        description: `${project.name} was removed from the sidebar.`,
-      });
-    },
-    [moveProjectToTrash]
-  );
 
   const handleRestoreProject = useCallback(
     (projectId: string) => {
@@ -571,7 +534,7 @@ export function Sidebar() {
               title="New Project"
               data-testid="new-project-button"
             >
-              <Plus className="w-4 h-4 flex-shrink-0" />
+              <Plus className="w-4 h-4 shrink-0" />
               <span className="ml-2 text-sm font-medium hidden lg:block whitespace-nowrap">
                 New
               </span>
@@ -583,12 +546,22 @@ export function Sidebar() {
               data-testid="open-project-button"
             >
               <FolderOpen className="w-4 h-4 shrink-0" />
-              <span className="ml-2 text-sm font-medium hidden lg:block whitespace-nowrap">
-                Open
-              </span>
               <span className="hidden lg:flex items-center justify-center w-5 h-5 text-[10px] font-mono rounded bg-white/5 border border-white/10 text-zinc-500 ml-2">
                 {ACTION_SHORTCUTS.openProject}
               </span>
+            </button>
+            <button
+              onClick={() => setShowTrashDialog(true)}
+              className="group flex items-center justify-center px-3 py-2.5 rounded-lg relative overflow-hidden transition-all text-muted-foreground hover:text-primary hover:bg-destructive/10 border border-sidebar-border"
+              title="Trash"
+              data-testid="trash-button"
+            >
+              <Trash2 className="size-4 shrink-0" />
+              {trashedProjects.length > 0 && (
+                <span className="absolute -top-[2px] -right-[2px] flex items-center justify-center w-5 h-5 text-[10px] font-medium rounded-full text-brand-500">
+                  {trashedProjects.length > 9 ? "9+" : trashedProjects.length}
+                </span>
+              )}
             </button>
           </div>
         )}
@@ -646,23 +619,10 @@ export function Sidebar() {
                           setCurrentProject(p);
                           setIsProjectPickerOpen(false);
                         }}
-                        onTrash={handleTrashProject}
                       />
                     ))}
                   </SortableContext>
                 </DndContext>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    setShowTrashDialog(true);
-                  }}
-                  className="text-destructive focus:text-destructive"
-                  data-testid="manage-trash"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Manage Trash ({trashedProjects.length})
-                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -767,38 +727,8 @@ export function Sidebar() {
 
       {/* Bottom Section - User / Settings */}
       <div className="border-t border-sidebar-border bg-sidebar-accent/10 shrink-0">
-        {/* Trash + Settings Links */}
+        {/* Settings Link */}
         <div className="p-2">
-          <button
-            onClick={() => setShowTrashDialog(true)}
-            className={cn(
-              "group flex items-center w-full px-2 lg:px-3 py-2.5 rounded-lg relative overflow-hidden transition-all titlebar-no-drag mb-2",
-              "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50",
-              sidebarOpen ? "justify-start" : "justify-center"
-            )}
-            title={!sidebarOpen ? "Trash" : undefined}
-            data-testid="trash-button"
-          >
-            <Trash2 className="w-4 h-4 shrink-0 transition-colors group-hover:text-destructive" />
-            <span
-              className={cn(
-                "ml-2.5 font-medium text-sm flex-1",
-                sidebarOpen ? "hidden lg:block" : "hidden"
-              )}
-            >
-              Trash
-            </span>
-            {trashedProjects.length > 0 && sidebarOpen && (
-              <span className="hidden lg:flex items-center justify-center min-w-[20px] px-1 h-5 text-[10px] font-mono rounded bg-destructive/10 border border-destructive/20 text-destructive">
-                {trashedProjects.length}
-              </span>
-            )}
-            {!sidebarOpen && (
-              <span className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 border border-border">
-                Trash ({trashedProjects.length})
-              </span>
-            )}
-          </button>
           <button
             onClick={() => setCurrentView("settings")}
             className={cn(

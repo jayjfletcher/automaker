@@ -337,7 +337,6 @@ export function BoardView() {
     }
   }, [showAddDialog, defaultSkipTests]);
 
-
   // Listen for auto mode feature completion and errors to reload features
   useEffect(() => {
     const api = getElectronAPI();
@@ -352,7 +351,10 @@ export function BoardView() {
         loadFeatures();
       } else if (event.type === "auto_mode_error") {
         // Reload features when an error occurs (feature moved to waiting_approval)
-        console.log("[Board] Feature error, reloading features...", event.error);
+        console.log(
+          "[Board] Feature error, reloading features...",
+          event.error
+        );
 
         // Remove from running tasks so it moves to the correct column
         if (event.featureId) {
@@ -415,7 +417,10 @@ export function BoardView() {
     const checkAllContexts = async () => {
       // Check context for in_progress, waiting_approval, and verified features
       const featuresWithPotentialContext = features.filter(
-        (f) => f.status === "in_progress" || f.status === "waiting_approval" || f.status === "verified"
+        (f) =>
+          f.status === "in_progress" ||
+          f.status === "waiting_approval" ||
+          f.status === "verified"
       );
       const contextChecks = await Promise.all(
         featuresWithPotentialContext.map(async (f) => ({
@@ -674,7 +679,9 @@ export function BoardView() {
       console.log(`[Board] Deleted agent context for feature ${featureId}`);
     } catch (error) {
       // Context file might not exist, which is fine
-      console.log(`[Board] Context file not found or already deleted for feature ${featureId}`);
+      console.log(
+        `[Board] Context file not found or already deleted for feature ${featureId}`
+      );
     }
 
     // Delete attached images if they exist
@@ -686,11 +693,17 @@ export function BoardView() {
             await api.deleteFile(imagePathObj.path);
             console.log(`[Board] Deleted image: ${imagePathObj.path}`);
           } catch (error) {
-            console.error(`[Board] Failed to delete image ${imagePathObj.path}:`, error);
+            console.error(
+              `[Board] Failed to delete image ${imagePathObj.path}:`,
+              error
+            );
           }
         }
       } catch (error) {
-        console.error(`[Board] Error deleting images for feature ${featureId}:`, error);
+        console.error(
+          `[Board] Error deleting images for feature ${featureId}:`,
+          error
+        );
       }
     }
 
@@ -1633,10 +1646,15 @@ export function BoardView() {
                   try {
                     const contextPath = `${currentProject.path}/.automaker/agents-context/${feature.id}.md`;
                     await api.deleteFile(contextPath);
-                    console.log(`[Board] Deleted agent context for feature ${feature.id}`);
+                    console.log(
+                      `[Board] Deleted agent context for feature ${feature.id}`
+                    );
                   } catch (error) {
                     // Context file might not exist, which is fine
-                    console.debug("[Board] No context file to delete for feature:", feature.id);
+                    console.debug(
+                      "[Board] No context file to delete for feature:",
+                      feature.id
+                    );
                   }
 
                   // Remove the feature
