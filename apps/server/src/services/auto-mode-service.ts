@@ -9,7 +9,9 @@
  * - Verification and merge workflows
  */
 
-import { query, AbortError, type Options } from "@anthropic-ai/claude-agent-sdk";
+import { AbortError } from "@anthropic-ai/claude-agent-sdk";
+import { ProviderFactory } from "../providers/provider-factory.js";
+import type { ExecuteOptions } from "../providers/types.js";
 import { exec } from "child_process";
 import { promisify } from "util";
 import path from "path";
@@ -33,6 +35,7 @@ interface Feature {
   priority?: number;
   spec?: string;
   model?: string; // Model to use for this feature
+  imagePaths?: Array<string | { path: string; filename?: string; mimeType?: string; [key: string]: unknown }>;
 }
 
 /**
@@ -237,12 +240,17 @@ export class AutoModeService {
       // Build the prompt
       const prompt = this.buildFeaturePrompt(feature);
 
+      // Extract image paths from feature
+      const imagePaths = feature.imagePaths?.map((img) =>
+        typeof img === "string" ? img : img.path
+      );
+
       // Get model from feature
       const model = getModelString(feature);
       console.log(`[AutoMode] Executing feature ${featureId} with model: ${model}`);
 
-      // Run the agent with the feature's model
-      await this.runAgent(workDir, featureId, prompt, abortController, undefined, model);
+      // Run the agent with the feature's model and images
+      await this.runAgent(workDir, featureId, prompt, abortController, imagePaths, model);
 
       // Mark as waiting_approval for user review
       await this.updateFeatureStatus(projectPath, featureId, "waiting_approval");
@@ -377,7 +385,126 @@ export class AutoModeService {
       const model = feature ? getModelString(feature) : MODEL_MAP.opus;
       console.log(`[AutoMode] Follow-up for feature ${featureId} using model: ${model}`);
 
-      await this.runAgent(workDir, featureId, prompt, abortController, imagePaths, model);
+      // Update feature status to in_progress
+      await this.updateFeatureStatus(projectPath, featureId, "in_progress");
+
+      // Copy follow-up images to feature folder
+      const copiedImagePaths: string[] = [];
+      if (imagePaths && imagePaths.length > 0) {
+        const featureImagesDir = path.join(
+          projectPath,
+          ".automaker",
+          "features",
+          featureId,
+          "images"
+        );
+
+        await fs.mkdir(featureImagesDir, { recursive: true });
+
+        for (const imagePath of imagePaths) {
+          try {
+            // Get the filename from the path
+            const filename = path.basename(imagePath);
+            const destPath = path.join(featureImagesDir, filename);
+
+            // Copy the image
+            await fs.copyFile(imagePath, destPath);
+
+            // Store the relative path (like FeatureLoader does)
+            const relativePath = path.join(
+              ".automaker",
+              "features",
+              featureId,
+              "images",
+              filename
+            );
+            copiedImagePaths.push(relativePath);
+
+          } catch (error) {
+            console.error(`[AutoMode] Failed to copy follow-up image ${imagePath}:`, error);
+          }
+        }
+      }
+
+      // Update feature object with new follow-up images BEFORE building prompt
+      if (copiedImagePaths.length > 0 && feature) {
+        const currentImagePaths = feature.imagePaths || [];
+        const newImagePaths = copiedImagePaths.map((p) => ({
+          path: p,
+          filename: path.basename(p),
+          mimeType: "image/png", // Default, could be improved
+        }));
+
+        feature.imagePaths = [...currentImagePaths, ...newImagePaths];
+      }
+
+      // Load previous agent output for context
+      const outputPath = path.join(
+        workDir,
+        ".automaker",
+        "features",
+        featureId,
+        "agent-output.md"
+      );
+      let previousContext = "";
+      try {
+        previousContext = await fs.readFile(outputPath, "utf-8");
+      } catch {
+        // No previous context
+      }
+
+      // Build follow-up prompt with context (feature now includes new images)
+      let followUpPrompt = prompt;
+      if (previousContext) {
+        followUpPrompt = `## Follow-up Request
+
+${this.buildFeaturePrompt(feature!)}
+
+## Previous Work
+The following is the output from the previous implementation:
+
+${previousContext}
+
+---
+
+## New Instructions
+${prompt}
+
+Please continue from where you left off and address the new instructions above.`;
+      }
+
+      // Combine original feature images with new follow-up images
+      const allImagePaths: string[] = [];
+
+      // Add all images from feature (now includes both original and new)
+      if (feature?.imagePaths) {
+        const allPaths = feature.imagePaths.map((img) =>
+          typeof img === "string" ? img : img.path
+        );
+        allImagePaths.push(...allPaths);
+      }
+
+      // Save updated feature.json with new images
+      if (copiedImagePaths.length > 0 && feature) {
+        const featurePath = path.join(
+          projectPath,
+          ".automaker",
+          "features",
+          featureId,
+          "feature.json"
+        );
+
+        try {
+          await fs.writeFile(featurePath, JSON.stringify(feature, null, 2));
+        } catch (error) {
+          console.error(`[AutoMode] Failed to save feature.json:`, error);
+        }
+      }
+
+      await this.runAgent(workDir, featureId, followUpPrompt, abortController, allImagePaths.length > 0 ? allImagePaths : undefined, model);
+
+      // Mark as waiting_approval for user review
+      await this.updateFeatureStatus(projectPath, featureId, "waiting_approval");
 
       this.emitAutoModeEvent("auto_mode_feature_complete", {
         featureId,
@@ -544,23 +671,25 @@ export class AutoModeService {
 Format your response as a structured markdown document.`;
 
     try {
-      const options: Options = {
+      const provider = ProviderFactory.getProviderForModel("claude-sonnet-4-20250514");
+
+      const options: ExecuteOptions = {
+        prompt,
         model: "claude-sonnet-4-20250514",
         maxTurns: 5,
         cwd: projectPath,
         allowedTools: ["Read", "Glob", "Grep"],
-        permissionMode: "acceptEdits",
         abortController,
       };
 
-      const stream = query({ prompt, options });
+      const stream = provider.executeQuery(options);
       let analysisResult = "";
 
       for await (const msg of stream) {
-        if (msg.type === "assistant" && msg.message.content) {
+        if (msg.type === "assistant" && msg.message?.content) {
           for (const block of msg.message.content) {
             if (block.type === "text") {
-              analysisResult = block.text;
+              analysisResult = block.text || "";
               this.emitAutoModeEvent("auto_mode_progress", {
                 featureId: analysisFeatureId,
                 content: block.text,
@@ -736,6 +865,27 @@ ${feature.spec}
 `;
     }
 
+    // Add images note (like old implementation)
+    if (feature.imagePaths && feature.imagePaths.length > 0) {
+      const imagesList = feature.imagePaths
+        .map((img, idx) => {
+          const path = typeof img === "string" ? img : img.path;
+          const filename = typeof img === "string" ? path.split("/").pop() : img.filename || path.split("/").pop();
+          const mimeType = typeof img === "string" ? "image/*" : img.mimeType || "image/*";
+          return `   ${idx + 1}. ${filename} (${mimeType})\n      Path: ${path}`;
+        })
+        .join("\n");
+
+      prompt += `
+**📎 Context Images Attached:**
+The user has attached ${feature.imagePaths.length} image(s) for context. These images are provided both visually (in the initial message) and as files you can read:
+
+${imagesList}
+
+You can use the Read tool to view these images at any time during implementation. Review them carefully before implementing.
+`;
+    }
+
     prompt += `
 ## Instructions
 
@@ -761,17 +911,62 @@ When done, summarize what you implemented and any notes for the developer.`;
   ): Promise<void> {
     const finalModel = model || MODEL_MAP.opus;
     console.log(`[AutoMode] runAgent called for feature ${featureId} with model: ${finalModel}`);
-    
-    // Check if this is an OpenAI/Codex model - Claude Agent SDK doesn't support these
-    if (finalModel.startsWith("gpt-") || finalModel.startsWith("o")) {
-      const errorMessage = `OpenAI/Codex models (like "${finalModel}") are not yet supported in server mode. ` +
-        `Please use a Claude model (opus, sonnet, or haiku) instead. ` +
-        `OpenAI/Codex models are only supported in the Electron app.`;
-      console.error(`[AutoMode] ${errorMessage}`);
-      throw new Error(errorMessage);
+
+    // Get provider for this model
+    const provider = ProviderFactory.getProviderForModel(finalModel);
+
+    console.log(
+      `[AutoMode] Using provider "${provider.getName()}" for model "${finalModel}"`
+    );
+
+    // Build prompt content with images (like AgentService)
+    let promptContent: string | Array<{ type: string; text?: string; source?: object }> = prompt;
+
+    if (imagePaths && imagePaths.length > 0) {
+      const contentBlocks: Array<{ type: string; text?: string; source?: object }> = [];
+
+      // Add text block first
+      contentBlocks.push({ type: "text", text: prompt });
+
+      // Add image blocks (for vision models)
+      for (const imagePath of imagePaths) {
+        try {
+          // Make path absolute by prepending workDir if it's relative
+          const absolutePath = path.isAbsolute(imagePath)
+            ? imagePath
+            : path.join(workDir, imagePath);
+
+          const imageBuffer = await fs.readFile(absolutePath);
+          const base64Data = imageBuffer.toString("base64");
+          const ext = path.extname(imagePath).toLowerCase();
+          const mimeTypeMap: Record<string, string> = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+          };
+          const mediaType = mimeTypeMap[ext] || "image/png";
+
+          contentBlocks.push({
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: mediaType,
+              data: base64Data,
+            },
+          });
+
+        } catch (error) {
+          console.error(`[AutoMode] Failed to load image ${imagePath}:`, error);
+        }
+      }
+
+      promptContent = contentBlocks;
     }
-    
-    const options: Options = {
+
+    const options: ExecuteOptions = {
+      prompt: promptContent,
       model: finalModel,
       maxTurns: 50,
       cwd: workDir,
@@ -783,35 +978,24 @@ When done, summarize what you implemented and any notes for the developer.`;
         "Grep",
         "Bash",
       ],
-      permissionMode: "acceptEdits",
-      sandbox: {
-        enabled: true,
-        autoAllowBashIfSandboxed: true,
-      },
       abortController,
     };
 
-    // Build prompt - include image paths for the agent to read
-    let finalPrompt = prompt;
-
-    if (imagePaths && imagePaths.length > 0) {
-      finalPrompt = `${prompt}\n\n## Reference Images\nThe following images are available for reference. Use the Read tool to view them:\n${imagePaths.map((p) => `- ${p}`).join("\n")}`;
-    }
-
-    const stream = query({ prompt: finalPrompt, options });
+    // Execute via provider
+    const stream = provider.executeQuery(options);
     let responseText = "";
     const outputPath = path.join(workDir, ".automaker", "features", featureId, "agent-output.md");
 
     for await (const msg of stream) {
-      if (msg.type === "assistant" && msg.message.content) {
+      if (msg.type === "assistant" && msg.message?.content) {
         for (const block of msg.message.content) {
           if (block.type === "text") {
-            responseText = block.text;
+            responseText = block.text || "";
 
             // Check for authentication errors in the response
-            if (block.text.includes("Invalid API key") ||
+            if (block.text && (block.text.includes("Invalid API key") ||
                 block.text.includes("authentication_failed") ||
-                block.text.includes("Fix external API key")) {
+                block.text.includes("Fix external API key"))) {
               throw new Error(
                 "Authentication failed: Invalid or expired API key. " +
                 "Please check your ANTHROPIC_API_KEY or run 'claude login' to re-authenticate."
@@ -830,20 +1014,10 @@ When done, summarize what you implemented and any notes for the developer.`;
             });
           }
         }
-      } else if (msg.type === "assistant" && (msg as { error?: string }).error === "authentication_failed") {
-        // Handle authentication error from the SDK
-        throw new Error(
-          "Authentication failed: Invalid or expired API key. " +
-          "Please set a valid ANTHROPIC_API_KEY environment variable or run 'claude login' to authenticate."
-        );
+      } else if (msg.type === "error") {
+        // Handle error messages
+        throw new Error(msg.error || "Unknown error");
       } else if (msg.type === "result" && msg.subtype === "success") {
-        // Check if result indicates an error
-        if (msg.is_error && msg.result?.includes("Invalid API key")) {
-          throw new Error(
-            "Authentication failed: Invalid or expired API key. " +
-            "Please set a valid ANTHROPIC_API_KEY environment variable or run 'claude login' to authenticate."
-          );
-        }
         responseText = msg.result || responseText;
       }
     }

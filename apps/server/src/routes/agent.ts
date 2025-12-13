@@ -40,11 +40,12 @@ export function createAgentRoutes(
   // Send a message
   router.post("/send", async (req: Request, res: Response) => {
     try {
-      const { sessionId, message, workingDirectory, imagePaths } = req.body as {
+      const { sessionId, message, workingDirectory, imagePaths, model } = req.body as {
         sessionId: string;
         message: string;
         workingDirectory?: string;
         imagePaths?: string[];
+        model?: string;
       };
 
       if (!sessionId || !message) {
@@ -61,6 +62,7 @@ export function createAgentRoutes(
           message,
           workingDirectory,
           imagePaths,
+          model,
         })
         .catch((error) => {
           console.error("[Agent Route] Error sending message:", error);
@@ -122,6 +124,27 @@ export function createAgentRoutes(
 
       const result = await agentService.clearSession(sessionId);
       res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ success: false, error: message });
+    }
+  });
+
+  // Set session model
+  router.post("/model", async (req: Request, res: Response) => {
+    try {
+      const { sessionId, model } = req.body as {
+        sessionId: string;
+        model: string;
+      };
+
+      if (!sessionId || !model) {
+        res.status(400).json({ success: false, error: "sessionId and model are required" });
+        return;
+      }
+
+      const result = await agentService.setSessionModel(sessionId, model);
+      res.json({ success: result });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       res.status(500).json({ success: false, error: message });

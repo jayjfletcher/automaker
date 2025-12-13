@@ -46,10 +46,11 @@ export function createSessionsRoutes(agentService: AgentService): Router {
   // Create a new session
   router.post("/", async (req: Request, res: Response) => {
     try {
-      const { name, projectPath, workingDirectory } = req.body as {
+      const { name, projectPath, workingDirectory, model } = req.body as {
         name: string;
         projectPath?: string;
         workingDirectory?: string;
+        model?: string;
       };
 
       if (!name) {
@@ -60,7 +61,8 @@ export function createSessionsRoutes(agentService: AgentService): Router {
       const session = await agentService.createSession(
         name,
         projectPath,
-        workingDirectory
+        workingDirectory,
+        model
       );
       res.json({ success: true, session });
     } catch (error) {
@@ -73,12 +75,13 @@ export function createSessionsRoutes(agentService: AgentService): Router {
   router.put("/:sessionId", async (req: Request, res: Response) => {
     try {
       const { sessionId } = req.params;
-      const { name, tags } = req.body as {
+      const { name, tags, model } = req.body as {
         name?: string;
         tags?: string[];
+        model?: string;
       };
 
-      const session = await agentService.updateSession(sessionId, { name, tags });
+      const session = await agentService.updateSession(sessionId, { name, tags, model });
       if (!session) {
         res.status(404).json({ success: false, error: "Session not found" });
         return;

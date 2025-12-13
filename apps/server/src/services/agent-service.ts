@@ -1,12 +1,14 @@
 /**
- * Agent Service - Runs Claude agents via the Claude Agent SDK
+ * Agent Service - Runs AI agents via provider architecture
  * Manages conversation sessions and streams responses via WebSocket
  */
 
-import { query, AbortError, type Options } from "@anthropic-ai/claude-agent-sdk";
+import { AbortError } from "@anthropic-ai/claude-agent-sdk";
 import path from "path";
 import fs from "fs/promises";
 import type { EventEmitter } from "../lib/events.js";
+import { ProviderFactory } from "../providers/provider-factory.js";
+import type { ExecuteOptions } from "../providers/types.js";
 
 interface Message {
   id: string;
@@ -26,6 +28,7 @@ interface Session {
   isRunning: boolean;
   abortController: AbortController | null;
   workingDirectory: string;
+  model?: string;
 }
 
 interface SessionMetadata {
@@ -37,6 +40,7 @@ interface SessionMetadata {
   updatedAt: string;
   archived?: boolean;
   tags?: string[];
+  model?: string;
 }
 
 export class AgentService {
@@ -91,11 +95,13 @@ export class AgentService {
     message,
     workingDirectory,
     imagePaths,
+    model,
   }: {
     sessionId: string;
     message: string;
     workingDirectory?: string;
     imagePaths?: string[];
+    model?: string;
   }) {
     const session = this.sessions.get(sessionId);
     if (!session) {
@@ -104,6 +110,12 @@ export class AgentService {
 
     if (session.isRunning) {
       throw new Error("Agent is already processing a message");
+    }
+
+    // Update session model if provided
+    if (model) {
+      session.model = model;
+      await this.updateSession(sessionId, { model });
     }
 
     // Read images and convert to base64
@@ -143,6 +155,12 @@ export class AgentService {
       timestamp: new Date().toISOString(),
     };
 
+    // Build conversation history from existing messages BEFORE adding current message
+    const conversationHistory = session.messages.map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+    }));
+
     session.messages.push(userMessage);
     session.isRunning = true;
     session.abortController = new AbortController();
@@ -156,11 +174,23 @@ export class AgentService {
     await this.saveSession(sessionId, session.messages);
 
     try {
-      const options: Options = {
-        model: "claude-opus-4-5-20251101",
+      // Use session model, parameter model, or default
+      const effectiveModel = model || session.model || "claude-opus-4-5-20251101";
+
+      // Get provider for this model
+      const provider = ProviderFactory.getProviderForModel(effectiveModel);
+
+      console.log(
+        `[AgentService] Using provider "${provider.getName()}" for model "${effectiveModel}"`
+      );
+
+      // Build options for provider
+      const options: ExecuteOptions = {
+        prompt: "", // Will be set below based on images
+        model: effectiveModel,
+        cwd: workingDirectory || session.workingDirectory,
         systemPrompt: this.getSystemPrompt(),
         maxTurns: 20,
-        cwd: workingDirectory || session.workingDirectory,
         allowedTools: [
           "Read",
           "Write",
@@ -171,23 +201,28 @@ export class AgentService {
           "WebSearch",
           "WebFetch",
         ],
-        permissionMode: "acceptEdits",
-        sandbox: {
-          enabled: true,
-          autoAllowBashIfSandboxed: true,
-        },
         abortController: session.abortController!,
+        conversationHistory: conversationHistory.length > 0 ? conversationHistory : undefined,
       };
 
       // Build prompt content
       let promptContent: string | Array<{ type: string; text?: string; source?: object }> =
         message;
 
+      // Append image paths to prompt text (like old implementation)
       if (imagePaths && imagePaths.length > 0) {
+        let enhancedMessage = message;
+
+        // Append image file paths to the message text
+        enhancedMessage += "\n\nAttached images:\n";
+        for (const imagePath of imagePaths) {
+          enhancedMessage += `- ${imagePath}\n`;
+        }
+
         const contentBlocks: Array<{ type: string; text?: string; source?: object }> = [];
 
-        if (message && message.trim()) {
-          contentBlocks.push({ type: "text", text: message });
+        if (enhancedMessage && enhancedMessage.trim()) {
+          contentBlocks.push({ type: "text", text: enhancedMessage });
         }
 
         for (const imagePath of imagePaths) {
@@ -219,25 +254,16 @@ export class AgentService {
 
         if (contentBlocks.length > 1 || contentBlocks[0]?.type === "image") {
           promptContent = contentBlocks;
+        } else {
+          promptContent = enhancedMessage;
         }
       }
 
-      // Build payload
-      const promptPayload = Array.isArray(promptContent)
-        ? (async function* () {
-            yield {
-              type: "user" as const,
-              session_id: "",
-              message: {
-                role: "user" as const,
-                content: promptContent,
-              },
-              parent_tool_use_id: null,
-            };
-          })()
-        : promptContent;
+      // Set the prompt in options
+      options.prompt = promptContent;
 
-      const stream = query({ prompt: promptPayload, options });
+      // Execute via provider
+      const stream = provider.executeQuery(options);
 
       let currentAssistantMessage: Message | null = null;
       let responseText = "";
@@ -245,7 +271,7 @@ export class AgentService {
 
       for await (const msg of stream) {
         if (msg.type === "assistant") {
-          if (msg.message.content) {
+          if (msg.message?.content) {
             for (const block of msg.message.content) {
               if (block.type === "text") {
                 responseText += block.text;
@@ -270,7 +296,7 @@ export class AgentService {
                 });
               } else if (block.type === "tool_use") {
                 const toolUse = {
-                  name: block.name,
+                  name: block.name || "unknown",
                   input: block.input,
                 };
                 toolUses.push(toolUse);
@@ -450,7 +476,8 @@ export class AgentService {
   async createSession(
     name: string,
     projectPath?: string,
-    workingDirectory?: string
+    workingDirectory?: string,
+    model?: string
   ): Promise<SessionMetadata> {
     const sessionId = this.generateId();
     const metadata = await this.loadMetadata();
@@ -462,12 +489,23 @@ export class AgentService {
       workingDirectory: workingDirectory || projectPath || process.cwd(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      model,
     };
 
     metadata[sessionId] = session;
     await this.saveMetadata(metadata);
 
     return session;
+  }
+
+  async setSessionModel(sessionId: string, model: string): Promise<boolean> {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      session.model = model;
+      await this.updateSession(sessionId, { model });
+      return true;
+    }
+    return false;
   }
 
   async updateSession(

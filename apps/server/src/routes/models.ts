@@ -3,6 +3,7 @@
  */
 
 import { Router, type Request, type Response } from "express";
+import { ProviderFactory } from "../providers/provider-factory.js";
 
 interface ModelDefinition {
   id: string;
@@ -93,7 +94,25 @@ export function createModelsRoutes(): Router {
         {
           id: "gpt-5.2",
           name: "GPT-5.2 (Codex)",
-          provider: "openai",
+          provider: "openai-codex",
+          contextWindow: 256000,
+          maxOutputTokens: 32768,
+          supportsVision: true,
+          supportsTools: true,
+        },
+        {
+          id: "gpt-5.1-codex-max",
+          name: "GPT-5.1 Codex Max",
+          provider: "openai-codex",
+          contextWindow: 256000,
+          maxOutputTokens: 32768,
+          supportsVision: true,
+          supportsTools: true,
+        },
+        {
+          id: "gpt-5.1-codex",
+          name: "GPT-5.1 Codex",
+          provider: "openai-codex",
           contextWindow: 256000,
           maxOutputTokens: 32768,
           supportsVision: true,
@@ -111,14 +130,24 @@ export function createModelsRoutes(): Router {
   // Check provider status
   router.get("/providers", async (_req: Request, res: Response) => {
     try {
-      const providers: Record<string, ProviderStatus> = {
+      // Get installation status from all providers
+      const statuses = await ProviderFactory.checkAllProviders();
+
+      const providers: Record<string, any> = {
         anthropic: {
-          available: !!process.env.ANTHROPIC_API_KEY,
-          hasApiKey: !!process.env.ANTHROPIC_API_KEY,
+          available: statuses.claude?.installed || false,
+          hasApiKey: !!process.env.ANTHROPIC_API_KEY || !!process.env.CLAUDE_CODE_OAUTH_TOKEN,
         },
         openai: {
           available: !!process.env.OPENAI_API_KEY,
           hasApiKey: !!process.env.OPENAI_API_KEY,
+        },
+        "openai-codex": {
+          available: statuses.codex?.installed || false,
+          hasApiKey: !!process.env.OPENAI_API_KEY,
+          cliInstalled: statuses.codex?.installed,
+          cliVersion: statuses.codex?.version,
+          cliPath: statuses.codex?.path,
         },
         google: {
           available: !!process.env.GOOGLE_API_KEY,
