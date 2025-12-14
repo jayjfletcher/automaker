@@ -30,6 +30,10 @@ export default defineConfig({
           url: `http://localhost:${port}`,
           reuseExistingServer: !process.env.CI,
           timeout: 120000,
+          env: {
+            ...process.env,
+            NEXT_PUBLIC_SKIP_SETUP: "true",
+          },
         },
       }),
 });

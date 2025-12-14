@@ -1004,7 +1004,7 @@ export function SpecView() {
 
       {/* Editor */}
       <div className="flex-1 p-4 overflow-hidden">
-        <Card className="h-full overflow-hidden">
+        <Card className="h-full">
           <XmlSyntaxEditor
             value={appSpec}
             onChange={handleChange}

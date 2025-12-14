@@ -12,12 +12,12 @@ export interface CliStatus {
 
 // Claude Auth Method - all possible authentication sources
 export type ClaudeAuthMethod =
-  | "oauth_token_env"    // CLAUDE_CODE_OAUTH_TOKEN environment variable
-  | "oauth_token"        // Stored OAuth token from claude login
-  | "api_key_env"        // ANTHROPIC_API_KEY environment variable
-  | "api_key"            // Manually stored API key
-  | "credentials_file"   // Generic credentials file detection
-  | "cli_authenticated"  // Claude CLI is installed and has active sessions/activity
+  | "oauth_token_env" // CLAUDE_CODE_OAUTH_TOKEN environment variable
+  | "oauth_token" // Stored OAuth token from claude login
+  | "api_key_env" // ANTHROPIC_API_KEY environment variable
+  | "api_key" // Manually stored API key
+  | "credentials_file" // Generic credentials file detection
+  | "cli_authenticated" // Claude CLI is installed and has active sessions/activity
   | "none";
 
 // Claude Auth Status
@@ -86,16 +86,19 @@ const initialInstallProgress: InstallProgress = {
   output: [],
 };
 
+// Check if setup should be skipped (for E2E testing)
+const shouldSkipSetup = process.env.NEXT_PUBLIC_SKIP_SETUP === "true";
+
 const initialState: SetupState = {
-  isFirstRun: true,
-  setupComplete: false,
-  currentStep: "welcome",
+  isFirstRun: !shouldSkipSetup,
+  setupComplete: shouldSkipSetup,
+  currentStep: shouldSkipSetup ? "complete" : "welcome",
 
   claudeCliStatus: null,
   claudeAuthStatus: null,
   claudeInstallProgress: { ...initialInstallProgress },
 
-  skipClaudeSetup: false,
+  skipClaudeSetup: shouldSkipSetup,
 };
 
 export const useSetupStore = create<SetupState & SetupActions>()(
@@ -106,12 +109,14 @@ export const useSetupStore = create<SetupState & SetupActions>()(
       // Setup flow
       setCurrentStep: (step) => set({ currentStep: step }),
 
-      completeSetup: () => set({ setupComplete: true, currentStep: "complete" }),
+      completeSetup: () =>
+        set({ setupComplete: true, currentStep: "complete" }),
 
-      resetSetup: () => set({
-        ...initialState,
-        isFirstRun: false, // Don't reset first run flag
-      }),
+      resetSetup: () =>
+        set({
+          ...initialState,
+          isFirstRun: false, // Don't reset first run flag
+        }),
 
       setIsFirstRun: (isFirstRun) => set({ isFirstRun }),
 
@@ -120,16 +125,18 @@ export const useSetupStore = create<SetupState & SetupActions>()(
 
       setClaudeAuthStatus: (status) => set({ claudeAuthStatus: status }),
 
-      setClaudeInstallProgress: (progress) => set({
-        claudeInstallProgress: {
-          ...get().claudeInstallProgress,
-          ...progress,
-        },
-      }),
+      setClaudeInstallProgress: (progress) =>
+        set({
+          claudeInstallProgress: {
+            ...get().claudeInstallProgress,
+            ...progress,
+          },
+        }),
 
-      resetClaudeInstallProgress: () => set({
-        claudeInstallProgress: { ...initialInstallProgress },
-      }),
+      resetClaudeInstallProgress: () =>
+        set({
+          claudeInstallProgress: { ...initialInstallProgress },
+        }),
 
       // Preferences
       setSkipClaudeSetup: (skip) => set({ skipClaudeSetup: skip }),

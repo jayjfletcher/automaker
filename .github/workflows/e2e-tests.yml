@@ -1,0 +1,91 @@
+name: E2E Tests
+
+on:
+  pull_request:
+    branches:
+      - "*"
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        # Use npm install instead of npm ci to correctly resolve platform-specific
+        # optional dependencies (e.g., @tailwindcss/oxide, lightningcss binaries)
+        run: npm install
+
+      - name: Install Linux native bindings
+        # Workaround for npm optional dependencies bug (npm/cli#4828)
+        # Explicitly install Linux bindings needed for build tools
+        run: |
+          npm install --no-save --force \
+            @rollup/rollup-linux-x64-gnu@4.53.3 \
+            @tailwindcss/oxide-linux-x64-gnu@4.1.17
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/app
+
+      - name: Build server
+        run: npm run build --workspace=apps/server
+
+      - name: Start backend server
+        run: npm run start --workspace=apps/server &
+        env:
+          PORT: 3008
+          NODE_ENV: test
+
+      - name: Wait for backend server
+        run: |
+          echo "Waiting for backend server to be ready..."
+          for i in {1..30}; do
+            if curl -s http://localhost:3008/api/health > /dev/null 2>&1; then
+              echo "Backend server is ready!"
+              exit 0
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 1
+          done
+          echo "Backend server failed to start!"
+          exit 1
+
+      - name: Run E2E tests
+        # Playwright automatically starts the Next.js frontend via webServer config
+        # (see apps/app/playwright.config.ts) - no need to start it manually
+        run: npm run test --workspace=apps/app
+        env:
+          CI: true
+          NEXT_PUBLIC_SERVER_URL: http://localhost:3008
+          NEXT_PUBLIC_SKIP_SETUP: "true"
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: apps/app/playwright-report/
+          retention-days: 7
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-results
+          path: apps/app/test-results/
+          retention-days: 7

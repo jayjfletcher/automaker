@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   FolderOpen,
   Folder,
@@ -8,6 +8,7 @@ import {
   Home,
   ArrowLeft,
   HardDrive,
+  CornerDownLeft,
 } from "lucide-react";
 import {
   Dialog,
@@ -18,6 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface DirectoryEntry {
   name: string;
@@ -48,16 +50,18 @@ export function FileBrowserDialog({
   onOpenChange,
   onSelect,
   title = "Select Project Directory",
-  description = "Navigate to your project folder",
+  description = "Navigate to your project folder or paste a path directly",
   initialPath,
 }: FileBrowserDialogProps) {
   const [currentPath, setCurrentPath] = useState<string>("");
+  const [pathInput, setPathInput] = useState<string>("");
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [directories, setDirectories] = useState<DirectoryEntry[]>([]);
   const [drives, setDrives] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [warning, setWarning] = useState("");
+  const pathInputRef = useRef<HTMLInputElement>(null);
 
   const browseDirectory = async (dirPath?: string) => {
     setLoading(true);
@@ -79,6 +83,7 @@ export function FileBrowserDialog({
 
       if (result.success) {
         setCurrentPath(result.currentPath);
+        setPathInput(result.currentPath);
         setParentPath(result.parentPath);
         setDirectories(result.directories);
         setDrives(result.drives || []);
@@ -99,6 +104,7 @@ export function FileBrowserDialog({
   useEffect(() => {
     if (!open) {
       setCurrentPath("");
+      setPathInput("");
       setParentPath(null);
       setDirectories([]);
       setError("");
@@ -131,6 +137,20 @@ export function FileBrowserDialog({
     browseDirectory(drivePath);
   };
 
+  const handleGoToPath = () => {
+    const trimmedPath = pathInput.trim();
+    if (trimmedPath) {
+      browseDirectory(trimmedPath);
+    }
+  };
+
+  const handlePathInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleGoToPath();
+    }
+  };
+
   const handleSelect = () => {
     if (currentPath) {
       onSelect(currentPath);
@@ -152,6 +172,31 @@ export function FileBrowserDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-3 min-h-[400px] flex-1 overflow-hidden py-2">
+          {/* Direct path input */}
+          <div className="flex items-center gap-2">
+            <Input
+              ref={pathInputRef}
+              type="text"
+              placeholder="Paste or type a full path (e.g., /home/user/projects/myapp)"
+              value={pathInput}
+              onChange={(e) => setPathInput(e.target.value)}
+              onKeyDown={handlePathInputKeyDown}
+              className="flex-1 font-mono text-sm"
+              data-testid="path-input"
+              disabled={loading}
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleGoToPath}
+              disabled={loading || !pathInput.trim()}
+              data-testid="go-to-path-button"
+            >
+              <CornerDownLeft className="w-4 h-4 mr-1" />
+              Go
+            </Button>
+          </div>
+
           {/* Drives selector (Windows only) */}
           {drives.length > 0 && (
             <div className="flex flex-wrap gap-2 p-3 rounded-lg bg-sidebar-accent/10 border border-sidebar-border">
@@ -251,8 +296,8 @@ export function FileBrowserDialog({
           </div>
 
           <div className="text-xs text-muted-foreground">
-            Click on a folder to navigate. Select the current folder or navigate
-            to a subfolder.
+            Paste a full path above, or click on folders to navigate. Press
+            Enter or click Go to jump to a path.
           </div>
         </div>
 

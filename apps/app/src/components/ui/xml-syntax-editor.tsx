@@ -1,6 +1,11 @@
 "use client";
 
-import { useRef, useCallback, useMemo } from "react";
+import CodeMirror from "@uiw/react-codemirror";
+import { xml } from "@codemirror/lang-xml";
+import { EditorView } from "@codemirror/view";
+import { Extension } from "@codemirror/state";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { tags as t } from "@lezer/highlight";
 import { cn } from "@/lib/utils";
 
 interface XmlSyntaxEditorProps {
@@ -11,199 +16,78 @@ interface XmlSyntaxEditorProps {
   "data-testid"?: string;
 }
 
-// Tokenize XML content into parts for highlighting
-interface Token {
-  type:
-    | "tag-bracket"
-    | "tag-name"
-    | "attribute-name"
-    | "attribute-equals"
-    | "attribute-value"
-    | "text"
-    | "comment"
-    | "cdata"
-    | "doctype";
-  value: string;
-}
+// Syntax highlighting that uses CSS variables from the app's theme system
+// This automatically adapts to any theme (dark, light, dracula, nord, etc.)
+const syntaxColors = HighlightStyle.define([
+  // XML tags - use primary color
+  { tag: t.tagName, color: "var(--primary)" },
+  { tag: t.angleBracket, color: "var(--muted-foreground)" },
 
-function tokenizeXml(text: string): Token[] {
-  const tokens: Token[] = [];
-  let i = 0;
+  // Attributes
+  { tag: t.attributeName, color: "var(--chart-2, oklch(0.6 0.118 184.704))" },
+  { tag: t.attributeValue, color: "var(--chart-1, oklch(0.646 0.222 41.116))" },
 
-  while (i < text.length) {
-    // Comment: <!-- ... -->
-    if (text.slice(i, i + 4) === "<!--") {
-      const end = text.indexOf("-->", i + 4);
-      if (end !== -1) {
-        tokens.push({ type: "comment", value: text.slice(i, end + 3) });
-        i = end + 3;
-        continue;
-      }
-    }
+  // Strings and content
+  { tag: t.string, color: "var(--chart-1, oklch(0.646 0.222 41.116))" },
+  { tag: t.content, color: "var(--foreground)" },
 
-    // CDATA: <![CDATA[ ... ]]>
-    if (text.slice(i, i + 9) === "<![CDATA[") {
-      const end = text.indexOf("]]>", i + 9);
-      if (end !== -1) {
-        tokens.push({ type: "cdata", value: text.slice(i, end + 3) });
-        i = end + 3;
-        continue;
-      }
-    }
+  // Comments
+  { tag: t.comment, color: "var(--muted-foreground)", fontStyle: "italic" },
 
-    // DOCTYPE: <!DOCTYPE ... >
-    if (text.slice(i, i + 9).toUpperCase() === "<!DOCTYPE") {
-      const end = text.indexOf(">", i + 9);
-      if (end !== -1) {
-        tokens.push({ type: "doctype", value: text.slice(i, end + 1) });
-        i = end + 1;
-        continue;
-      }
-    }
+  // Special
+  { tag: t.processingInstruction, color: "var(--muted-foreground)" },
+  { tag: t.documentMeta, color: "var(--muted-foreground)" },
+]);
 
-    // Tag: < ... >
-    if (text[i] === "<") {
-      // Find the end of the tag
-      let tagEnd = i + 1;
-      let inString: string | null = null;
+// Editor theme using CSS variables
+const editorTheme = EditorView.theme({
+  "&": {
+    height: "100%",
+    fontSize: "0.875rem",
+    fontFamily: "ui-monospace, monospace",
+    backgroundColor: "transparent",
+    color: "var(--foreground)",
+  },
+  ".cm-scroller": {
+    overflow: "auto",
+    fontFamily: "ui-monospace, monospace",
+  },
+  ".cm-content": {
+    padding: "1rem",
+    minHeight: "100%",
+    caretColor: "var(--primary)",
+  },
+  ".cm-cursor, .cm-dropCursor": {
+    borderLeftColor: "var(--primary)",
+  },
+  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
+    {
+      backgroundColor: "oklch(0.55 0.25 265 / 0.3)",
+    },
+  ".cm-activeLine": {
+    backgroundColor: "transparent",
+  },
+  ".cm-line": {
+    padding: "0",
+  },
+  "&.cm-focused": {
+    outline: "none",
+  },
+  ".cm-gutters": {
+    display: "none",
+  },
+  ".cm-placeholder": {
+    color: "var(--muted-foreground)",
+    fontStyle: "italic",
+  },
+});
 
-      while (tagEnd < text.length) {
-        const char = text[tagEnd];
-
-        if (inString) {
-          if (char === inString && text[tagEnd - 1] !== "\\") {
-            inString = null;
-          }
-        } else {
-          if (char === '"' || char === "'") {
-            inString = char;
-          } else if (char === ">") {
-            tagEnd++;
-            break;
-          }
-        }
-        tagEnd++;
-      }
-
-      const tagContent = text.slice(i, tagEnd);
-      const tagTokens = tokenizeTag(tagContent);
-      tokens.push(...tagTokens);
-      i = tagEnd;
-      continue;
-    }
-
-    // Text content between tags
-    const nextTag = text.indexOf("<", i);
-    if (nextTag === -1) {
-      tokens.push({ type: "text", value: text.slice(i) });
-      break;
-    } else if (nextTag > i) {
-      tokens.push({ type: "text", value: text.slice(i, nextTag) });
-      i = nextTag;
-    }
-  }
-
-  return tokens;
-}
-
-function tokenizeTag(tag: string): Token[] {
-  const tokens: Token[] = [];
-  let i = 0;
-
-  // Opening bracket (< or </ or <?)
-  if (tag.startsWith("</")) {
-    tokens.push({ type: "tag-bracket", value: "</" });
-    i = 2;
-  } else if (tag.startsWith("<?")) {
-    tokens.push({ type: "tag-bracket", value: "<?" });
-    i = 2;
-  } else {
-    tokens.push({ type: "tag-bracket", value: "<" });
-    i = 1;
-  }
-
-  // Skip whitespace
-  while (i < tag.length && /\s/.test(tag[i])) {
-    tokens.push({ type: "text", value: tag[i] });
-    i++;
-  }
-
-  // Tag name
-  let tagName = "";
-  while (i < tag.length && /[a-zA-Z0-9_:-]/.test(tag[i])) {
-    tagName += tag[i];
-    i++;
-  }
-  if (tagName) {
-    tokens.push({ type: "tag-name", value: tagName });
-  }
-
-  // Attributes and closing
-  while (i < tag.length) {
-    // Skip whitespace
-    if (/\s/.test(tag[i])) {
-      let ws = "";
-      while (i < tag.length && /\s/.test(tag[i])) {
-        ws += tag[i];
-        i++;
-      }
-      tokens.push({ type: "text", value: ws });
-      continue;
-    }
-
-    // Closing bracket
-    if (tag[i] === ">" || tag.slice(i, i + 2) === "/>" || tag.slice(i, i + 2) === "?>") {
-      tokens.push({ type: "tag-bracket", value: tag.slice(i) });
-      break;
-    }
-
-    // Attribute name
-    let attrName = "";
-    while (i < tag.length && /[a-zA-Z0-9_:-]/.test(tag[i])) {
-      attrName += tag[i];
-      i++;
-    }
-    if (attrName) {
-      tokens.push({ type: "attribute-name", value: attrName });
-    }
-
-    // Skip whitespace around =
-    while (i < tag.length && /\s/.test(tag[i])) {
-      tokens.push({ type: "text", value: tag[i] });
-      i++;
-    }
-
-    // Equals sign
-    if (tag[i] === "=") {
-      tokens.push({ type: "attribute-equals", value: "=" });
-      i++;
-    }
-
-    // Skip whitespace after =
-    while (i < tag.length && /\s/.test(tag[i])) {
-      tokens.push({ type: "text", value: tag[i] });
-      i++;
-    }
-
-    // Attribute value
-    if (tag[i] === '"' || tag[i] === "'") {
-      const quote = tag[i];
-      let value = quote;
-      i++;
-      while (i < tag.length && tag[i] !== quote) {
-        value += tag[i];
-        i++;
-      }
-      if (i < tag.length) {
-        value += tag[i];
-        i++;
-      }
-      tokens.push({ type: "attribute-value", value });
-    }
-  }
-
-  return tokens;
-}
+// Combine all extensions
+const extensions: Extension[] = [
+  xml(),
+  syntaxHighlighting(syntaxColors),
+  editorTheme,
+];
 
 export function XmlSyntaxEditor({
   value,
@@ -212,78 +96,24 @@ export function XmlSyntaxEditor({
   className,
   "data-testid": testId,
 }: XmlSyntaxEditorProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const highlightRef = useRef<HTMLDivElement>(null);
-
-  // Sync scroll between textarea and highlight layer
-  const handleScroll = useCallback(() => {
-    if (textareaRef.current && highlightRef.current) {
-      highlightRef.current.scrollTop = textareaRef.current.scrollTop;
-      highlightRef.current.scrollLeft = textareaRef.current.scrollLeft;
-    }
-  }, []);
-
-  // Handle tab key for indentation
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Tab") {
-        e.preventDefault();
-        const textarea = e.currentTarget;
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const newValue =
-          value.substring(0, start) + "  " + value.substring(end);
-        onChange(newValue);
-        // Reset cursor position after state update
-        requestAnimationFrame(() => {
-          textarea.selectionStart = textarea.selectionEnd = start + 2;
-        });
-      }
-    },
-    [value, onChange]
-  );
-
-  // Memoize the highlighted content
-  const highlightedContent = useMemo(() => {
-    const tokens = tokenizeXml(value);
-
-    return tokens.map((token, index) => {
-      const className = `xml-${token.type}`;
-      // React handles escaping automatically, just render the raw value
-      return (
-        <span key={index} className={className}>
-          {token.value}
-        </span>
-      );
-    });
-  }, [value]);
-
   return (
-    <div className={cn("relative w-full h-full xml-editor", className)}>
-      {/* Syntax highlighted layer (read-only, behind textarea) */}
-      <div
-        ref={highlightRef}
-        className="absolute inset-0 overflow-auto pointer-events-none font-mono text-sm p-4 whitespace-pre-wrap break-words"
-        aria-hidden="true"
-      >
-        {value ? (
-          <code className="xml-highlight">{highlightedContent}</code>
-        ) : (
-          <span className="text-muted-foreground opacity-50">{placeholder}</span>
-        )}
-      </div>
-
-      {/* Actual textarea (transparent text, handles input) */}
-      <textarea
-        ref={textareaRef}
+    <div className={cn("w-full h-full", className)} data-testid={testId}>
+      <CodeMirror
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onScroll={handleScroll}
-        onKeyDown={handleKeyDown}
-        placeholder=""
-        spellCheck={false}
-        className="absolute inset-0 w-full h-full font-mono text-sm p-4 bg-transparent resize-none focus:outline-none text-transparent caret-foreground selection:bg-primary/30"
-        data-testid={testId}
+        onChange={onChange}
+        extensions={extensions}
+        theme="none"
+        placeholder={placeholder}
+        className="h-full [&_.cm-editor]:h-full"
+        basicSetup={{
+          lineNumbers: false,
+          foldGutter: false,
+          highlightActiveLine: false,
+          highlightSelectionMatches: true,
+          autocompletion: true,
+          bracketMatching: true,
+          indentOnInput: true,
+        }}
       />
     </div>
   );

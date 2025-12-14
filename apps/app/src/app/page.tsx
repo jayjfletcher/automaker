@@ -222,12 +222,6 @@ function HomeContent() {
     return (
       <main className="h-screen overflow-hidden" data-testid="app-container">
         <SetupView />
-        {/* Environment indicator */}
-        {isMounted && !isElectron() && (
-          <div className="fixed bottom-4 right-4 px-3 py-1.5 bg-blue-500/10 text-blue-500 text-xs rounded-full border border-blue-500/20 pointer-events-none">
-            Web Mode
-          </div>
-        )}
       </main>
     );
   }
@@ -241,13 +235,6 @@ function HomeContent() {
       >
         {renderView()}
       </div>
-
-      {/* Environment indicator - only show after mount to prevent hydration issues */}
-      {isMounted && !isElectron() && (
-        <div className="fixed bottom-4 right-4 px-3 py-1.5 bg-blue-500/10 text-blue-500 text-xs rounded-full border border-blue-500/20 pointer-events-none">
-          Web Mode
-        </div>
-      )}
 
       {/* Hidden streamer panel - opens with "\" key, pushes content */}
       <div

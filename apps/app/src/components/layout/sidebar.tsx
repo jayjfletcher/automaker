@@ -216,6 +216,16 @@ export function Sidebar() {
     setSpecCreatingForProject,
   } = useAppStore();
 
+  // Environment variable flags for hiding sidebar items
+  // Note: Next.js requires static access to process.env variables (no dynamic keys)
+  const hideTerminal = process.env.NEXT_PUBLIC_HIDE_TERMINAL === "true";
+  const hideWiki = process.env.NEXT_PUBLIC_HIDE_WIKI === "true";
+  const hideRunningAgents =
+    process.env.NEXT_PUBLIC_HIDE_RUNNING_AGENTS === "true";
+  const hideContext = process.env.NEXT_PUBLIC_HIDE_CONTEXT === "true";
+  const hideSpecEditor = process.env.NEXT_PUBLIC_HIDE_SPEC_EDITOR === "true";
+  const hideAiProfiles = process.env.NEXT_PUBLIC_HIDE_AI_PROFILES === "true";
+
   // Get customizable keyboard shortcuts
   const shortcuts = useKeyboardShortcutsConfig();
 
@@ -949,54 +959,75 @@ export function Sidebar() {
     }
   }, [emptyTrash, trashedProjects.length]);
 
-  const navSections: NavSection[] = [
-    {
-      label: "Project",
-      items: [
-        {
-          id: "board",
-          label: "Kanban Board",
-          icon: LayoutGrid,
-          shortcut: shortcuts.board,
-        },
-        {
-          id: "agent",
-          label: "Agent Runner",
-          icon: Bot,
-          shortcut: shortcuts.agent,
-        },
-      ],
-    },
-    {
-      label: "Tools",
-      items: [
-        {
-          id: "spec",
-          label: "Spec Editor",
-          icon: FileText,
-          shortcut: shortcuts.spec,
-        },
-        {
-          id: "context",
-          label: "Context",
-          icon: BookOpen,
-          shortcut: shortcuts.context,
-        },
-        {
-          id: "profiles",
-          label: "AI Profiles",
-          icon: UserCircle,
-          shortcut: shortcuts.profiles,
-        },
-        {
-          id: "terminal",
-          label: "Terminal",
-          icon: Terminal,
-          shortcut: shortcuts.terminal,
-        },
-      ],
-    },
-  ];
+  const navSections: NavSection[] = useMemo(() => {
+    const allToolsItems: NavItem[] = [
+      {
+        id: "spec",
+        label: "Spec Editor",
+        icon: FileText,
+        shortcut: shortcuts.spec,
+      },
+      {
+        id: "context",
+        label: "Context",
+        icon: BookOpen,
+        shortcut: shortcuts.context,
+      },
+      {
+        id: "profiles",
+        label: "AI Profiles",
+        icon: UserCircle,
+        shortcut: shortcuts.profiles,
+      },
+      {
+        id: "terminal",
+        label: "Terminal",
+        icon: Terminal,
+        shortcut: shortcuts.terminal,
+      },
+    ];
+
+    // Filter out hidden items
+    const visibleToolsItems = allToolsItems.filter((item) => {
+      if (item.id === "spec" && hideSpecEditor) {
+        return false;
+      }
+      if (item.id === "context" && hideContext) {
+        return false;
+      }
+      if (item.id === "profiles" && hideAiProfiles) {
+        return false;
+      }
+      if (item.id === "terminal" && hideTerminal) {
+        return false;
+      }
+      return true;
+    });
+
+    return [
+      {
+        label: "Project",
+        items: [
+          {
+            id: "board",
+            label: "Kanban Board",
+            icon: LayoutGrid,
+            shortcut: shortcuts.board,
+          },
+          {
+            id: "agent",
+            label: "Agent Runner",
+            icon: Bot,
+            shortcut: shortcuts.agent,
+          },
+        ],
+      },
+      {
+        label: "Tools",
+        items: visibleToolsItems,
+      },
+    ];
+  }, [shortcuts, hideSpecEditor, hideContext, hideTerminal, hideAiProfiles]);
 
   // Handle selecting the currently highlighted project
   const selectHighlightedProject = useCallback(() => {
@@ -1627,108 +1658,112 @@ export function Sidebar() {
         {/* Course Promo Badge */}
         <CoursePromoBadge sidebarOpen={sidebarOpen} />
         {/* Wiki Link */}
-        <div className="p-2 pb-0">
-          <button
-            onClick={() => setCurrentView("wiki")}
-            className={cn(
-              "group flex items-center w-full px-2 lg:px-3 py-2.5 rounded-lg relative overflow-hidden transition-all titlebar-no-drag",
-              isActiveRoute("wiki")
-                ? "bg-sidebar-accent/50 text-foreground border border-sidebar-border"
-                : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50",
-              sidebarOpen ? "justify-start" : "justify-center"
-            )}
-            title={!sidebarOpen ? "Wiki" : undefined}
-            data-testid="wiki-link"
-          >
-            {isActiveRoute("wiki") && (
-              <div className="absolute inset-y-0 left-0 w-0.5 bg-brand-500 rounded-l-md"></div>
-            )}
-            <BookOpen
+        {!hideWiki && (
+          <div className="p-2 pb-0">
+            <button
+              onClick={() => setCurrentView("wiki")}
               className={cn(
-                "w-4 h-4 shrink-0 transition-colors",
+                "group flex items-center w-full px-2 lg:px-3 py-2.5 rounded-lg relative overflow-hidden transition-all titlebar-no-drag",
                 isActiveRoute("wiki")
-                  ? "text-brand-500"
-                  : "group-hover:text-brand-400"
+                  ? "bg-sidebar-accent/50 text-foreground border border-sidebar-border"
+                  : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50",
+                sidebarOpen ? "justify-start" : "justify-center"
               )}
-            />
-            <span
-              className={cn(
-                "ml-2.5 font-medium text-sm flex-1 text-left",
-                sidebarOpen ? "hidden lg:block" : "hidden"
-              )}
+              title={!sidebarOpen ? "Wiki" : undefined}
+              data-testid="wiki-link"
             >
-              Wiki
-            </span>
-            {!sidebarOpen && (
-              <span className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 border border-border">
-                Wiki
-              </span>
-            )}
-          </button>
-        </div>
-        {/* Running Agents Link */}
-        <div className="p-2 pb-0">
-          <button
-            onClick={() => setCurrentView("running-agents")}
-            className={cn(
-              "group flex items-center w-full px-2 lg:px-3 py-2.5 rounded-lg relative overflow-hidden transition-all titlebar-no-drag",
-              isActiveRoute("running-agents")
-                ? "bg-sidebar-accent/50 text-foreground border border-sidebar-border"
-                : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50",
-              sidebarOpen ? "justify-start" : "justify-center"
-            )}
-            title={!sidebarOpen ? "Running Agents" : undefined}
-            data-testid="running-agents-link"
-          >
-            {isActiveRoute("running-agents") && (
-              <div className="absolute inset-y-0 left-0 w-0.5 bg-brand-500 rounded-l-md"></div>
-            )}
-            <div className="relative">
-              <Activity
+              {isActiveRoute("wiki") && (
+                <div className="absolute inset-y-0 left-0 w-0.5 bg-brand-500 rounded-l-md"></div>
+              )}
+              <BookOpen
                 className={cn(
                   "w-4 h-4 shrink-0 transition-colors",
-                  isActiveRoute("running-agents")
+                  isActiveRoute("wiki")
                     ? "text-brand-500"
                     : "group-hover:text-brand-400"
                 )}
               />
-              {/* Running agents count badge - shown in collapsed state */}
-              {!sidebarOpen && runningAgentsCount > 0 && (
+              <span
+                className={cn(
+                  "ml-2.5 font-medium text-sm flex-1 text-left",
+                  sidebarOpen ? "hidden lg:block" : "hidden"
+                )}
+              >
+                Wiki
+              </span>
+              {!sidebarOpen && (
+                <span className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 border border-border">
+                  Wiki
+                </span>
+              )}
+            </button>
+          </div>
+        )}
+        {/* Running Agents Link */}
+        {!hideRunningAgents && (
+          <div className="p-2 pb-0">
+            <button
+              onClick={() => setCurrentView("running-agents")}
+              className={cn(
+                "group flex items-center w-full px-2 lg:px-3 py-2.5 rounded-lg relative overflow-hidden transition-all titlebar-no-drag",
+                isActiveRoute("running-agents")
+                  ? "bg-sidebar-accent/50 text-foreground border border-sidebar-border"
+                  : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50",
+                sidebarOpen ? "justify-start" : "justify-center"
+              )}
+              title={!sidebarOpen ? "Running Agents" : undefined}
+              data-testid="running-agents-link"
+            >
+              {isActiveRoute("running-agents") && (
+                <div className="absolute inset-y-0 left-0 w-0.5 bg-brand-500 rounded-l-md"></div>
+              )}
+              <div className="relative">
+                <Activity
+                  className={cn(
+                    "w-4 h-4 shrink-0 transition-colors",
+                    isActiveRoute("running-agents")
+                      ? "text-brand-500"
+                      : "group-hover:text-brand-400"
+                  )}
+                />
+                {/* Running agents count badge - shown in collapsed state */}
+                {!sidebarOpen && runningAgentsCount > 0 && (
+                  <span
+                    className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-5 h-5 px-1 text-[10px] font-semibold rounded-full bg-brand-500 text-white"
+                    data-testid="running-agents-count-collapsed"
+                  >
+                    {runningAgentsCount > 99 ? "99" : runningAgentsCount}
+                  </span>
+                )}
+              </div>
+              <span
+                className={cn(
+                  "ml-2.5 font-medium text-sm flex-1 text-left",
+                  sidebarOpen ? "hidden lg:block" : "hidden"
+                )}
+              >
+                Running Agents
+              </span>
+              {/* Running agents count badge - shown in expanded state */}
+              {sidebarOpen && runningAgentsCount > 0 && (
                 <span
-                  className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-5 h-5 px-1 text-[10px] font-semibold rounded-full bg-brand-500 text-white"
-                  data-testid="running-agents-count-collapsed"
+                  className={cn(
+                    "hidden lg:flex items-center justify-center min-w-6 h-6 px-1.5 text-xs font-semibold rounded-full bg-brand-500 text-white",
+                    isActiveRoute("running-agents") && "bg-brand-600"
+                  )}
+                  data-testid="running-agents-count"
                 >
                   {runningAgentsCount > 99 ? "99" : runningAgentsCount}
                 </span>
               )}
-            </div>
-            <span
-              className={cn(
-                "ml-2.5 font-medium text-sm flex-1 text-left",
-                sidebarOpen ? "hidden lg:block" : "hidden"
+              {!sidebarOpen && (
+                <span className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 border border-border">
+                  Running Agents
+                </span>
               )}
-            >
-              Running Agents
-            </span>
-            {/* Running agents count badge - shown in expanded state */}
-            {sidebarOpen && runningAgentsCount > 0 && (
-              <span
-                className={cn(
-                  "hidden lg:flex items-center justify-center min-w-6 h-6 px-1.5 text-xs font-semibold rounded-full bg-brand-500 text-white",
-                  isActiveRoute("running-agents") && "bg-brand-600"
-                )}
-                data-testid="running-agents-count"
-              >
-                {runningAgentsCount > 99 ? "99" : runningAgentsCount}
-              </span>
-            )}
-            {!sidebarOpen && (
-              <span className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 border border-border">
-                Running Agents
-              </span>
-            )}
-          </button>
-        </div>
+            </button>
+          </div>
+        )}
         {/* Settings Link */}
         <div className="p-2">
           <button
