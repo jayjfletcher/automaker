@@ -9,7 +9,7 @@ import { getErrorMessage, logError } from "../common.js";
 
 // Optional files that are expected to not exist in new projects
 // Don't log ENOENT errors for these to reduce noise
-const OPTIONAL_FILES = ["categories.json"];
+const OPTIONAL_FILES = ["categories.json", "app_spec.txt"];
 
 function isOptionalFile(filePath: string): boolean {
   return OPTIONAL_FILES.some((optionalFile) => filePath.endsWith(optionalFile));
