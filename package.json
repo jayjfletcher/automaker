@@ -35,10 +35,23 @@
     "test:server:coverage": "npm run test:cov --workspace=apps/server",
     "test:packages": "npm run test -w @automaker/types -w @automaker/utils -w @automaker/prompts -w @automaker/platform -w @automaker/model-resolver -w @automaker/dependency-resolver -w @automaker/git-utils --if-present",
     "test:all": "npm run test:packages && npm run test:server",
-    "lint:lockfile": "! grep -q 'git+ssh://' package-lock.json || (echo 'Error: package-lock.json contains git+ssh:// URLs. Run: git config --global url.\"https://github.com/\".insteadOf \"git@github.com:\"' && exit 1)"
+    "lint:lockfile": "! grep -q 'git+ssh://' package-lock.json || (echo 'Error: package-lock.json contains git+ssh:// URLs. Run: git config --global url.\"https://github.com/\".insteadOf \"git@github.com:\"' && exit 1)",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,json,css,md,html,yml,yaml}": [
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "cross-spawn": "^7.0.6",
     "tree-kill": "^1.2.2"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.7.4"
   }
 }
