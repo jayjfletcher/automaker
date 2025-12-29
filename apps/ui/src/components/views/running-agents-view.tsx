@@ -174,7 +174,10 @@ export function RunningAgentsView() {
                       )}
                     </div>
                     {agent.description && (
-                      <p className="text-sm text-muted-foreground truncate max-w-md" title={agent.description}>
+                      <p
+                        className="text-sm text-muted-foreground truncate max-w-md"
+                        title={agent.description}
+                      >
                         {agent.description}
                       </p>
                     )}
@@ -228,7 +231,9 @@ export function RunningAgentsView() {
           open={true}
           onClose={() => setSelectedAgent(null)}
           projectPath={selectedAgent.projectPath}
-          featureDescription={selectedAgent.description || selectedAgent.title || selectedAgent.featureId}
+          featureDescription={
+            selectedAgent.description || selectedAgent.title || selectedAgent.featureId
+          }
           featureId={selectedAgent.featureId}
           featureStatus="running"
         />
