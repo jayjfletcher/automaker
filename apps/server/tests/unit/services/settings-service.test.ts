@@ -563,27 +563,31 @@ describe('settings-service.ts', () => {
       expect(result.errors.length).toBeGreaterThan(0);
     });
 
-    it('should handle migration errors gracefully', async () => {
-      // Create a read-only directory to cause write errors
-      const readOnlyDir = path.join(os.tmpdir(), `readonly-${Date.now()}`);
-      await fs.mkdir(readOnlyDir, { recursive: true });
-      await fs.chmod(readOnlyDir, 0o444);
+    // Skip on Windows as chmod doesn't work the same way (CI runs on Linux)
+    it.skipIf(process.platform === 'win32')(
+      'should handle migration errors gracefully',
+      async () => {
+        // Create a read-only directory to cause write errors
+        const readOnlyDir = path.join(os.tmpdir(), `readonly-${Date.now()}`);
+        await fs.mkdir(readOnlyDir, { recursive: true });
+        await fs.chmod(readOnlyDir, 0o444);
 
-      const readOnlyService = new SettingsService(readOnlyDir);
-      const localStorageData = {
-        'automaker-storage': JSON.stringify({
-          state: { theme: 'light' },
-        }),
-      };
+        const readOnlyService = new SettingsService(readOnlyDir);
+        const localStorageData = {
+          'automaker-storage': JSON.stringify({
+            state: { theme: 'light' },
+          }),
+        };
 
-      const result = await readOnlyService.migrateFromLocalStorage(localStorageData);
+        const result = await readOnlyService.migrateFromLocalStorage(localStorageData);
 
-      expect(result.success).toBe(false);
-      expect(result.errors.length).toBeGreaterThan(0);
+        expect(result.success).toBe(false);
+        expect(result.errors.length).toBeGreaterThan(0);
 
-      await fs.chmod(readOnlyDir, 0o755);
-      await fs.rm(readOnlyDir, { recursive: true, force: true });
-    });
+        await fs.chmod(readOnlyDir, 0o755);
+        await fs.rm(readOnlyDir, { recursive: true, force: true });
+      }
+    );
   });
 
   describe('getDataDir', () => {
@@ -594,18 +598,22 @@ describe('settings-service.ts', () => {
   });
 
   describe('atomicWriteJson', () => {
-    it('should handle write errors and clean up temp file', async () => {
-      // Create a read-only directory to cause write errors
-      const readOnlyDir = path.join(os.tmpdir(), `readonly-${Date.now()}`);
-      await fs.mkdir(readOnlyDir, { recursive: true });
-      await fs.chmod(readOnlyDir, 0o444);
+    // Skip on Windows as chmod doesn't work the same way (CI runs on Linux)
+    it.skipIf(process.platform === 'win32')(
+      'should handle write errors and clean up temp file',
+      async () => {
+        // Create a read-only directory to cause write errors
+        const readOnlyDir = path.join(os.tmpdir(), `readonly-${Date.now()}`);
+        await fs.mkdir(readOnlyDir, { recursive: true });
+        await fs.chmod(readOnlyDir, 0o444);
 
-      const readOnlyService = new SettingsService(readOnlyDir);
+        const readOnlyService = new SettingsService(readOnlyDir);
 
-      await expect(readOnlyService.updateGlobalSettings({ theme: 'light' })).rejects.toThrow();
+        await expect(readOnlyService.updateGlobalSettings({ theme: 'light' })).rejects.toThrow();
 
-      await fs.chmod(readOnlyDir, 0o755);
-      await fs.rm(readOnlyDir, { recursive: true, force: true });
-    });
+        await fs.chmod(readOnlyDir, 0o755);
+        await fs.rm(readOnlyDir, { recursive: true, force: true });
+      }
+    );
   });
 });

@@ -216,7 +216,8 @@ describe('terminal-service.ts', () => {
   });
 
   describe('createSession', () => {
-    it('should create a new terminal session', () => {
+    // Skip on Windows as path.resolve converts Unix paths to Windows paths (CI runs on Linux)
+    it.skipIf(process.platform === 'win32')('should create a new terminal session', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.statSync).mockReturnValue({ isDirectory: () => true } as any);
       vi.spyOn(process, 'env', 'get').mockReturnValue({ SHELL: '/bin/bash' });
@@ -284,7 +285,8 @@ describe('terminal-service.ts', () => {
       expect(session.cwd).toBe('/home/user');
     });
 
-    it('should fix double slashes in path', () => {
+    // Skip on Windows as path.resolve converts Unix paths to Windows paths (CI runs on Linux)
+    it.skipIf(process.platform === 'win32')('should fix double slashes in path', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.statSync).mockReturnValue({ isDirectory: () => true } as any);
       vi.spyOn(process, 'env', 'get').mockReturnValue({ SHELL: '/bin/bash' });
@@ -490,7 +492,8 @@ describe('terminal-service.ts', () => {
   });
 
   describe('getAllSessions', () => {
-    it('should return all active sessions', () => {
+    // Skip on Windows as path.resolve converts Unix paths to Windows paths (CI runs on Linux)
+    it.skipIf(process.platform === 'win32')('should return all active sessions', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.statSync).mockReturnValue({ isDirectory: () => true } as any);
       vi.spyOn(process, 'env', 'get').mockReturnValue({ SHELL: '/bin/bash' });
