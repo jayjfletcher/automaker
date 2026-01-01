@@ -53,9 +53,12 @@ let mainWindow: BrowserWindow | null = null;
 let serverProcess: ChildProcess | null = null;
 let staticServer: Server | null = null;
 
-// Default ports - will be dynamically assigned if these are in use
-const DEFAULT_SERVER_PORT = 3008;
-const DEFAULT_STATIC_PORT = 3007;
+// Default ports (can be overridden via env) - will be dynamically assigned if these are in use
+// When launched via root init.mjs we pass:
+// - PORT (backend)
+// - TEST_PORT (vite dev server / static)
+const DEFAULT_SERVER_PORT = parseInt(process.env.PORT || '3008', 10);
+const DEFAULT_STATIC_PORT = parseInt(process.env.TEST_PORT || '3007', 10);
 
 // Actual ports in use (set during startup)
 let serverPort = DEFAULT_SERVER_PORT;
@@ -75,7 +78,9 @@ function isPortAvailable(port: number): Promise<boolean> {
         resolve(true);
       });
     });
-    server.listen(port, '127.0.0.1');
+    // Use Node's default binding semantics (matches most dev servers)
+    // This avoids false-positives when a port is taken on IPv6/dual-stack.
+    server.listen(port);
   });
 }
 
