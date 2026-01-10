@@ -57,7 +57,7 @@ const PROVIDER_ICON_DEFINITIONS: Record<ProviderIconKey, ProviderIconDefinition>
     // Official OpenCode favicon - geometric icon from opencode.ai
     path: 'M384 416H128V96H384V416ZM320 160H192V352H320V160Z',
     fillRule: 'evenodd',
-    fill: 'white',
+    fill: '#6366F1',
   },
   deepseek: {
     viewBox: '0 0 24 24',
