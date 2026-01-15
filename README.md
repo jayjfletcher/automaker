@@ -29,9 +29,9 @@
 > cp docker-compose.override.yml.example docker-compose.override.yml
 > ```
 >
-> ```
 > **Edit configuration file**
 >
+> ```
 > Update project path volumes:
 > - ~/yourworkspace/directory:/projects:rw
 >
