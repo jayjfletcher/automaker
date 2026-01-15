@@ -2,6 +2,50 @@
   <img src="apps/ui/public/readme_logo.svg" alt="Automaker Logo" height="80" />
 </p>
 
+> **[!QUICKSTART FOR MICHAEL]**
+> 
+> **Clone**
+> ```bash
+> git clone https://github.com/AutoMaker-Org/automaker.git
+> cd automaker
+> ```
+> 
+> **Install**
+> ```bash
+> npm install
+> ```
+> 
+> **Build**
+> ```bash
+> npm run build:packages`
+> ```
+> 
+> **Start development containers**
+> ```bash
+> PHP_VERSION=8.4 docker-compose up -d --build
+> ```
+> 
+> **Get API key**
+> ```bash
+> docker-compose logs -f
+> ```
+> 
+> **Open UI**
+> ```
+> Access UI at http://localhost:3007
+> Enter API key from logs when prompted
+> ```
+>
+> **Shutdown (when done developing)**
+> ```bash
+> docker-compose down
+> ```
+> 
+> **Start fresh (Rebuilds everything)**
+> ```bash
+> PHP_VERSION=8.4 docker-compose down && docker volume rm automaker-data && docker-compose up -d --build
+> ```
+
 > **[!TIP]**
 >
 > **Learn more about Agentic Coding!**
