@@ -23,6 +23,23 @@
 > npm run build:packages
 > ```
 >
+> **Copy configuration file**
+>
+> ```bash
+> cp docker-compose.override.yml.example docker-compose.override.yml
+> ```
+>
+> ```
+> **Edit configuration file**
+>
+> Update project path volumes:
+> - ~/yourworkspace/directory:/projects:rw
+>
+> Uncomment authentication volumes
+> - ~/.claude:/home/automaker/.claude
+>
+> ```
+>
 > **Start development containers**
 >
 > ```bash
