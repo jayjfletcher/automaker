@@ -193,18 +193,16 @@ export function ProjectContextMenu({
   const handleDialogClose = useCallback(
     (isOpen: boolean) => {
       setShowRemoveDialog(isOpen);
-      // Only close the context menu after dialog closes if removal was confirmed
-      // This prevents race condition where onClose unmounts the component
-      // before ConfirmDialog finishes its internal state cleanup
-      if (!isOpen && removeConfirmed) {
+      // Close the context menu when dialog closes (whether confirmed or cancelled)
+      // This prevents the context menu from reappearing after dialog interaction
+      if (!isOpen) {
+        // Reset confirmation state
+        setRemoveConfirmed(false);
+        // Always close the context menu when dialog closes
         onClose();
       }
-      // Reset confirmation state when dialog closes (for potential reopen)
-      if (!isOpen) {
-        setRemoveConfirmed(false);
-      }
     },
-    [onClose, removeConfirmed]
+    [onClose]
   );
 
   return (
