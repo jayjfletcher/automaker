@@ -23,6 +23,9 @@ services:
         # Override with: UID=$(id -u) GID=$(id -g) docker-compose build
         UID: ${UID:-1001}
         GID: ${GID:-1001}
+        # PHP version for Laravel development (supports 8.1, 8.2, 8.3, 8.4)
+        # Set to enable PHP: PHP_VERSION=8.3 docker-compose build
+        PHP_VERSION: ${PHP_VERSION:-}
     container_name: automaker-dev-server
     restart: unless-stopped
     ports:
@@ -102,6 +105,7 @@ services:
       args:
         UID: ${UID:-1001}
         GID: ${GID:-1001}
+        PHP_VERSION: ${PHP_VERSION:-}
     container_name: automaker-dev-ui
     restart: unless-stopped
     ports:

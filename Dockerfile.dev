@@ -7,6 +7,10 @@
 
 FROM node:22-slim
 
+# PHP version - leave empty to skip PHP installation (supports 8.1, 8.2, 8.3, 8.4)
+# Override with: docker build --build-arg PHP_VERSION=8.3 ...
+ARG PHP_VERSION=""
+
 # Install build dependencies for native modules (node-pty) and runtime tools
 # Also install Playwright/Chromium system dependencies (aligns with playwright install-deps on Debian/Ubuntu)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -31,6 +35,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mv gh_${GH_VERSION}_linux_${GH_ARCH}/bin/gh /usr/local/bin/gh \
     && rm -rf gh.tar.gz gh_${GH_VERSION}_linux_${GH_ARCH} \
     && rm -rf /var/lib/apt/lists/*
+
+# Conditionally install PHP with Laravel extensions, Composer, SQLite, and Xdebug
+# Only runs when PHP_VERSION is specified (e.g., --build-arg PHP_VERSION=8.3)
+COPY scripts/install-php.sh /tmp/install-php.sh
+RUN chmod +x /tmp/install-php.sh && /tmp/install-php.sh "${PHP_VERSION}" && rm /tmp/install-php.sh
 
 # Install Claude CLI globally
 RUN npm install -g @anthropic-ai/claude-code

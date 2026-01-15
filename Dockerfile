@@ -64,6 +64,10 @@ LABEL automaker.git.commit.sha="${GIT_COMMIT_SHA}"
 ARG UID=1001
 ARG GID=1001
 
+# PHP version - leave empty to skip PHP installation (supports 8.1, 8.2, 8.3, 8.4)
+# Override with: docker build --build-arg PHP_VERSION=8.3 ...
+ARG PHP_VERSION=""
+
 # Install git, curl, bash (for terminal), gosu (for user switching), and GitHub CLI (pinned version, multi-arch)
 # Also install Playwright/Chromium system dependencies (aligns with playwright install-deps on Debian/Ubuntu)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -87,6 +91,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mv gh_${GH_VERSION}_linux_${GH_ARCH}/bin/gh /usr/local/bin/gh \
     && rm -rf gh.tar.gz gh_${GH_VERSION}_linux_${GH_ARCH} \
     && rm -rf /var/lib/apt/lists/*
+
+# Conditionally install PHP with Laravel extensions, Composer, SQLite, and Xdebug
+# Only runs when PHP_VERSION is specified (e.g., --build-arg PHP_VERSION=8.3)
+COPY scripts/install-php.sh /tmp/install-php.sh
+RUN chmod +x /tmp/install-php.sh && /tmp/install-php.sh "${PHP_VERSION}" && rm /tmp/install-php.sh
 
 # Install Claude CLI globally (available to all users via npm global bin)
 RUN npm install -g @anthropic-ai/claude-code
