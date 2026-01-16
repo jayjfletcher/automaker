@@ -277,9 +277,14 @@ export class ClaudeUsageService {
               ptyProcess.write('\x1b'); // Send escape key
 
               // Fallback: if ESC doesn't exit (Linux), use SIGTERM after 2s
+              // Windows doesn't support signals, so just call kill() without args
               setTimeout(() => {
                 if (!settled && ptyProcess && !ptyProcess.killed) {
-                  ptyProcess.kill('SIGTERM');
+                  if (this.isWindows) {
+                    ptyProcess.kill();
+                  } else {
+                    ptyProcess.kill('SIGTERM');
+                  }
                 }
               }, 2000);
             }
