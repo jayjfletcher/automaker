@@ -745,7 +745,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   recentFolders: [],
   worktreePanelCollapsed: false,
   lastSelectedSessionByProject: {},
-  autoLoadClaudeMd: false,
+  autoLoadClaudeMd: true,
   skipSandboxWarning: false,
   codexAutoLoadAgents: DEFAULT_CODEX_AUTO_LOAD_AGENTS,
   codexSandboxMode: DEFAULT_CODEX_SANDBOX_MODE,
