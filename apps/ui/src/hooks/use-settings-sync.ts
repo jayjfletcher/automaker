@@ -215,6 +215,15 @@ export function useSettingsSync(): SettingsSyncState {
       if (result.success) {
         lastSyncedRef.current = updateHash;
         logger.debug('Settings synced to server');
+
+        // Update localStorage cache with synced settings to keep it fresh
+        // This prevents stale data when switching between Electron and web modes
+        try {
+          setItem('automaker-settings-cache', JSON.stringify(updates));
+          logger.debug('Updated localStorage cache after sync');
+        } catch (storageError) {
+          logger.warn('Failed to update localStorage cache after sync:', storageError);
+        }
       } else {
         logger.error('Failed to sync settings:', result.error);
       }

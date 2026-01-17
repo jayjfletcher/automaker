@@ -114,6 +114,20 @@ export function resetMigrationState(): void {
  */
 export function parseLocalStorageSettings(): Partial<GlobalSettings> | null {
   try {
+    // First, check for fresh server settings cache (updated whenever server settings are fetched)
+    // This prevents stale data when switching between modes
+    const settingsCache = getItem('automaker-settings-cache');
+    if (settingsCache) {
+      try {
+        const cached = JSON.parse(settingsCache) as GlobalSettings;
+        logger.debug('Using fresh settings cache from localStorage');
+        return cached;
+      } catch (e) {
+        logger.warn('Failed to parse settings cache, falling back to old storage');
+      }
+    }
+
+    // Fall back to old Zustand persisted storage
     const automakerStorage = getItem('automaker-storage');
     if (!automakerStorage) {
       return null;
@@ -412,6 +426,15 @@ export function useSettingsMigration(): MigrationState {
           if (global.success && global.settings) {
             serverSettings = global.settings as unknown as GlobalSettings;
             logger.info(`Server has ${serverSettings.projects?.length ?? 0} projects`);
+
+            // Update localStorage with fresh server data to keep cache in sync
+            // This prevents stale localStorage data from being used when switching between modes
+            try {
+              localStorage.setItem('automaker-settings-cache', JSON.stringify(serverSettings));
+              logger.debug('Updated localStorage with fresh server settings');
+            } catch (storageError) {
+              logger.warn('Failed to update localStorage cache:', storageError);
+            }
           }
         } catch (error) {
           logger.error('Failed to fetch server settings:', error);
