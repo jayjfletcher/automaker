@@ -119,9 +119,13 @@ function runBashScript() {
     process.exit(code ?? 0);
   });
 
-  // Forward signals to child process
-  process.on('SIGINT', () => child.kill('SIGINT'));
-  process.on('SIGTERM', () => child.kill('SIGTERM'));
+  // Forward signals to child process (guard against race conditions)
+  process.on('SIGINT', () => {
+    if (!child.killed) child.kill('SIGINT');
+  });
+  process.on('SIGTERM', () => {
+    if (!child.killed) child.kill('SIGTERM');
+  });
 }
 
 runBashScript();
