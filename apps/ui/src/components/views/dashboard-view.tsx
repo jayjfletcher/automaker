@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { createLogger } from '@automaker/utils/logger';
 import { useNavigate } from '@tanstack/react-router';
-import { useAppStore, type ThemeMode } from '@/store/app-store';
+import { useAppStore } from '@/store/app-store';
 import { useOSDetection } from '@/hooks/use-os-detection';
 import { getElectronAPI, isElectron } from '@/lib/electron';
 import { initializeProject } from '@/lib/project-init';
@@ -76,14 +76,11 @@ export function DashboardView() {
 
   const {
     projects,
-    trashedProjects,
-    currentProject,
     upsertAndSetCurrentProject,
     addProject,
     setCurrentProject,
     toggleProjectFavorite,
     moveProjectToTrash,
-    theme: globalTheme,
   } = useAppStore();
 
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
@@ -143,12 +140,8 @@ export function DashboardView() {
           return;
         }
 
-        const trashedProject = trashedProjects.find((p) => p.path === path);
-        const effectiveTheme =
-          (trashedProject?.theme as ThemeMode | undefined) ||
-          (currentProject?.theme as ThemeMode | undefined) ||
-          globalTheme;
-        upsertAndSetCurrentProject(path, name, effectiveTheme);
+        // Theme handling (trashed project recovery or undefined for global) is done by the store
+        upsertAndSetCurrentProject(path, name);
 
         toast.success('Project opened', {
           description: `Opened ${name}`,
@@ -164,15 +157,7 @@ export function DashboardView() {
         setIsOpening(false);
       }
     },
-    [
-      projects,
-      trashedProjects,
-      currentProject,
-      globalTheme,
-      upsertAndSetCurrentProject,
-      navigate,
-      moveProjectToTrash,
-    ]
+    [projects, upsertAndSetCurrentProject, navigate, moveProjectToTrash]
   );
 
   const handleOpenProject = useCallback(async () => {
