@@ -21,6 +21,13 @@ export type {
   ReasoningEffort,
 } from './provider.js';
 
+// Provider constants and utilities
+export {
+  DEFAULT_TIMEOUT_MS,
+  REASONING_TIMEOUT_MULTIPLIERS,
+  calculateReasoningTimeout,
+} from './provider.js';
+
 // Codex CLI types
 export type {
   CodexSandboxMode,
@@ -70,12 +77,15 @@ export type { ImageData, ImageContentBlock } from './image.js';
 // Model types and constants
 export {
   CLAUDE_MODEL_MAP,
+  CLAUDE_CANONICAL_MAP,
+  LEGACY_CLAUDE_ALIAS_MAP,
   CODEX_MODEL_MAP,
   CODEX_MODEL_IDS,
   REASONING_CAPABLE_MODELS,
   supportsReasoningEffort,
   getAllCodexModelIds,
   DEFAULT_MODELS,
+  type ClaudeCanonicalId,
   type ModelAlias,
   type CodexModelId,
   type AgentModel,
@@ -100,12 +110,26 @@ export type {
   BacklogPlanPrompts,
   EnhancementPrompts,
   CommitMessagePrompts,
+  TitleGenerationPrompts,
+  IssueValidationPrompts,
+  IdeationPrompts,
+  AppSpecPrompts,
+  ContextDescriptionPrompts,
+  SuggestionsPrompts,
+  TaskExecutionPrompts,
   PromptCustomization,
   ResolvedAutoModePrompts,
   ResolvedAgentPrompts,
   ResolvedBacklogPlanPrompts,
   ResolvedEnhancementPrompts,
   ResolvedCommitMessagePrompts,
+  ResolvedTitleGenerationPrompts,
+  ResolvedIssueValidationPrompts,
+  ResolvedIdeationPrompts,
+  ResolvedAppSpecPrompts,
+  ResolvedContextDescriptionPrompts,
+  ResolvedSuggestionsPrompts,
+  ResolvedTaskExecutionPrompts,
 } from './prompts.js';
 export { DEFAULT_PROMPT_CUSTOMIZATION } from './prompts.js';
 
@@ -114,6 +138,7 @@ export type {
   ThemeMode,
   PlanningMode,
   ThinkingLevel,
+  ServerLogLevel,
   ModelProvider,
   PhaseModelEntry,
   PhaseModelConfig,
@@ -129,6 +154,23 @@ export type {
   BoardBackgroundSettings,
   WorktreeInfo,
   ProjectSettings,
+  // Event hook types
+  EventHookTrigger,
+  EventHookHttpMethod,
+  EventHookShellAction,
+  EventHookHttpAction,
+  EventHookAction,
+  EventHook,
+  // Claude-compatible provider types (new)
+  ApiKeySource,
+  ClaudeCompatibleProviderType,
+  ClaudeModelAlias,
+  ProviderModel,
+  ClaudeCompatibleProvider,
+  ClaudeCompatibleProviderTemplate,
+  // Claude API profile types (deprecated)
+  ClaudeApiProfile,
+  ClaudeApiProfileTemplate,
 } from './settings.js';
 export {
   DEFAULT_KEYBOARD_SHORTCUTS,
@@ -136,11 +178,18 @@ export {
   DEFAULT_GLOBAL_SETTINGS,
   DEFAULT_CREDENTIALS,
   DEFAULT_PROJECT_SETTINGS,
+  DEFAULT_MAX_CONCURRENCY,
   SETTINGS_VERSION,
   CREDENTIALS_VERSION,
   PROJECT_SETTINGS_VERSION,
   THINKING_TOKEN_BUDGET,
   getThinkingTokenBudget,
+  // Event hook constants
+  EVENT_HOOK_TRIGGER_LABELS,
+  // Claude-compatible provider templates (new)
+  CLAUDE_PROVIDER_TEMPLATES,
+  // Claude API profile constants (deprecated)
+  CLAUDE_API_PROFILE_TEMPLATES,
 } from './settings.js';
 
 // Model display constants
@@ -206,6 +255,18 @@ export {
   validateBareModelId,
 } from './provider-utils.js';
 
+// Model migration utilities
+export {
+  isLegacyCursorModelId,
+  isLegacyOpencodeModelId,
+  isLegacyClaudeAlias,
+  migrateModelId,
+  migrateCursorModelIds,
+  migrateOpencodeModelIds,
+  migratePhaseModelEntry,
+  getBareModelIdForCli,
+} from './model-migration.js';
+
 // Pipeline types
 export type {
   PipelineStep,
@@ -246,3 +307,25 @@ export type {
   IdeationStreamEvent,
   IdeationAnalysisEvent,
 } from './ideation.js';
+
+// Notification types
+export type { NotificationType, Notification, NotificationsFile } from './notification.js';
+export { NOTIFICATIONS_VERSION, DEFAULT_NOTIFICATIONS_FILE } from './notification.js';
+
+// Event history types
+export type {
+  StoredEvent,
+  StoredEventIndex,
+  StoredEventSummary,
+  EventHistoryFilter,
+  EventReplayResult,
+  EventReplayHookResult,
+} from './event-history.js';
+export { EVENT_HISTORY_VERSION, DEFAULT_EVENT_HISTORY_INDEX } from './event-history.js';
+
+// Worktree and PR types
+export type { PRState, WorktreePRInfo } from './worktree.js';
+export { PR_STATES, validatePRState } from './worktree.js';
+
+// Terminal types
+export type { TerminalInfo } from './terminal.js';

@@ -9,11 +9,14 @@ import type { Request, Response } from 'express';
 import { createLogger } from '@automaker/utils';
 import { CLAUDE_MODEL_MAP } from '@automaker/model-resolver';
 import { simpleQuery } from '../../../providers/simple-query-service.js';
+import type { SettingsService } from '../../../services/settings-service.js';
+import { getPromptCustomization } from '../../../lib/settings-helpers.js';
 
 const logger = createLogger('GenerateTitle');
 
 interface GenerateTitleRequestBody {
   description: string;
+  projectPath?: string;
 }
 
 interface GenerateTitleSuccessResponse {
@@ -26,19 +29,12 @@ interface GenerateTitleErrorResponse {
   error: string;
 }
 
-const SYSTEM_PROMPT = `You are a title generator. Your task is to create a concise, descriptive title (5-10 words max) for a software feature based on its description.
-
-Rules:
-- Output ONLY the title, nothing else
-- Keep it short and action-oriented (e.g., "Add dark mode toggle", "Fix login validation")
-- Start with a verb when possible (Add, Fix, Update, Implement, Create, etc.)
-- No quotes, periods, or extra formatting
-- Capture the essence of the feature in a scannable way`;
-
-export function createGenerateTitleHandler(): (req: Request, res: Response) => Promise<void> {
+export function createGenerateTitleHandler(
+  settingsService?: SettingsService
+): (req: Request, res: Response) => Promise<void> {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const { description } = req.body as GenerateTitleRequestBody;
+      const { description, projectPath } = req.body as GenerateTitleRequestBody;
 
       if (!description || typeof description !== 'string') {
         const response: GenerateTitleErrorResponse = {
@@ -61,15 +57,23 @@ export function createGenerateTitleHandler(): (req: Request, res: Response) => P
 
       logger.info(`Generating title for description: ${trimmedDescription.substring(0, 50)}...`);
 
+      // Get customized prompts from settings
+      const prompts = await getPromptCustomization(settingsService, '[GenerateTitle]');
+      const systemPrompt = prompts.titleGeneration.systemPrompt;
+
+      // Get credentials for API calls (uses hardcoded haiku model, no phase setting)
+      const credentials = await settingsService?.getCredentials();
+
       const userPrompt = `Generate a concise title for this feature:\n\n${trimmedDescription}`;
 
       // Use simpleQuery - provider abstraction handles all the streaming/extraction
       const result = await simpleQuery({
-        prompt: `${SYSTEM_PROMPT}\n\n${userPrompt}`,
+        prompt: `${systemPrompt}\n\n${userPrompt}`,
         model: CLAUDE_MODEL_MAP.haiku,
         cwd: process.cwd(),
         maxTurns: 1,
         allowedTools: [],
+        credentials, // Pass credentials for resolving 'credentials' apiKeySource
       });
 
       const title = result.text;

@@ -11,7 +11,7 @@ import { getModelProvider, PROVIDER_PREFIXES, stripProviderPrefix } from '@autom
 import type { ModelProvider } from '@automaker/types';
 import { CLAUDE_MODELS, CURSOR_MODELS, ModelOption } from './model-constants';
 import { useEffect } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { Spinner } from '@/components/ui/spinner';
 
 interface ModelSelectorProps {
   selectedModel: string; // Can be ModelAlias or "cursor-{id}"
@@ -31,6 +31,7 @@ export function ModelSelector({
     codexModelsLoading,
     codexModelsError,
     fetchCodexModels,
+    disabledProviders,
   } = useAppStore();
   const { cursorCliStatus, codexCliStatus } = useSetupStore();
 
@@ -69,79 +70,106 @@ export function ModelSelector({
 
   // Filter Cursor models based on enabled models from global settings
   const filteredCursorModels = CURSOR_MODELS.filter((model) => {
-    // Extract the cursor model ID from the prefixed ID (e.g., "cursor-auto" -> "auto")
-    const cursorModelId = stripProviderPrefix(model.id);
-    return enabledCursorModels.includes(cursorModelId as any);
+    // enabledCursorModels stores CursorModelIds which may or may not have "cursor-" prefix
+    // (e.g., 'auto', 'sonnet-4.5' without prefix, but 'cursor-gpt-5.2' with prefix)
+    // CURSOR_MODELS always has the "cursor-" prefix added in model-constants.ts
+    // Check both the full ID (for GPT models) and the unprefixed version (for non-GPT models)
+    const unprefixedId = model.id.startsWith('cursor-') ? model.id.slice(7) : model.id;
+    return (
+      enabledCursorModels.includes(model.id as any) ||
+      enabledCursorModels.includes(unprefixedId as any)
+    );
   });
 
   const handleProviderChange = (provider: ModelProvider) => {
     if (provider === 'cursor' && selectedProvider !== 'cursor') {
       // Switch to Cursor's default model (from global settings)
-      onModelSelect(`${PROVIDER_PREFIXES.cursor}${cursorDefaultModel}`);
+      // cursorDefaultModel is now canonical (e.g., 'cursor-auto'), so use directly
+      onModelSelect(cursorDefaultModel);
     } else if (provider === 'codex' && selectedProvider !== 'codex') {
       // Switch to Codex's default model (use isDefault flag from dynamic models)
       const defaultModel = codexModels.find((m) => m.isDefault);
       const defaultModelId = defaultModel?.id || codexModels[0]?.id || 'codex-gpt-5.2-codex';
       onModelSelect(defaultModelId);
     } else if (provider === 'claude' && selectedProvider !== 'claude') {
-      // Switch to Claude's default model
-      onModelSelect('sonnet');
+      // Switch to Claude's default model (canonical format)
+      onModelSelect('claude-sonnet');
     }
   };
+
+  // Check which providers are disabled
+  const isClaudeDisabled = disabledProviders.includes('claude');
+  const isCursorDisabled = disabledProviders.includes('cursor');
+  const isCodexDisabled = disabledProviders.includes('codex');
+
+  // Count available providers
+  const availableProviders = [
+    !isClaudeDisabled && 'claude',
+    !isCursorDisabled && 'cursor',
+    !isCodexDisabled && 'codex',
+  ].filter(Boolean) as ModelProvider[];
 
   return (
     <div className="space-y-4">
       {/* Provider Selection */}
-      <div className="space-y-2">
-        <Label>AI Provider</Label>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => handleProviderChange('claude')}
-            className={cn(
-              'flex-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors flex items-center justify-center gap-2',
-              selectedProvider === 'claude'
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-background hover:bg-accent border-border'
+      {availableProviders.length > 1 && (
+        <div className="space-y-2">
+          <Label>AI Provider</Label>
+          <div className="flex gap-2">
+            {!isClaudeDisabled && (
+              <button
+                type="button"
+                onClick={() => handleProviderChange('claude')}
+                className={cn(
+                  'flex-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors flex items-center justify-center gap-2',
+                  selectedProvider === 'claude'
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background hover:bg-accent border-border'
+                )}
+                data-testid={`${testIdPrefix}-provider-claude`}
+              >
+                <AnthropicIcon className="w-4 h-4" />
+                Claude
+              </button>
             )}
-            data-testid={`${testIdPrefix}-provider-claude`}
-          >
-            <AnthropicIcon className="w-4 h-4" />
-            Claude
-          </button>
-          <button
-            type="button"
-            onClick={() => handleProviderChange('cursor')}
-            className={cn(
-              'flex-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors flex items-center justify-center gap-2',
-              selectedProvider === 'cursor'
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-background hover:bg-accent border-border'
+            {!isCursorDisabled && (
+              <button
+                type="button"
+                onClick={() => handleProviderChange('cursor')}
+                className={cn(
+                  'flex-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors flex items-center justify-center gap-2',
+                  selectedProvider === 'cursor'
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background hover:bg-accent border-border'
+                )}
+                data-testid={`${testIdPrefix}-provider-cursor`}
+              >
+                <CursorIcon className="w-4 h-4" />
+                Cursor CLI
+              </button>
             )}
-            data-testid={`${testIdPrefix}-provider-cursor`}
-          >
-            <CursorIcon className="w-4 h-4" />
-            Cursor CLI
-          </button>
-          <button
-            type="button"
-            onClick={() => handleProviderChange('codex')}
-            className={cn(
-              'flex-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors flex items-center justify-center gap-2',
-              selectedProvider === 'codex'
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-background hover:bg-accent border-border'
+            {!isCodexDisabled && (
+              <button
+                type="button"
+                onClick={() => handleProviderChange('codex')}
+                className={cn(
+                  'flex-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors flex items-center justify-center gap-2',
+                  selectedProvider === 'codex'
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background hover:bg-accent border-border'
+                )}
+                data-testid={`${testIdPrefix}-provider-codex`}
+              >
+                <OpenAIIcon className="w-4 h-4" />
+                Codex CLI
+              </button>
             )}
-            data-testid={`${testIdPrefix}-provider-codex`}
-          >
-            <OpenAIIcon className="w-4 h-4" />
-            Codex CLI
-          </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Claude Models */}
-      {selectedProvider === 'claude' && (
+      {selectedProvider === 'claude' && !isClaudeDisabled && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <Label className="flex items-center gap-2">
@@ -179,7 +207,7 @@ export function ModelSelector({
       )}
 
       {/* Cursor Models */}
-      {selectedProvider === 'cursor' && (
+      {selectedProvider === 'cursor' && !isCursorDisabled && (
         <div className="space-y-3">
           {/* Warning when Cursor CLI is not available */}
           {!isCursorAvailable && (
@@ -248,7 +276,7 @@ export function ModelSelector({
       )}
 
       {/* Codex Models */}
-      {selectedProvider === 'codex' && (
+      {selectedProvider === 'codex' && !isCodexDisabled && (
         <div className="space-y-3">
           {/* Warning when Codex CLI is not available */}
           {!isCodexAvailable && (
@@ -274,7 +302,7 @@ export function ModelSelector({
           {/* Loading state */}
           {codexModelsLoading && dynamicCodexModels.length === 0 && (
             <div className="flex items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
-              <RefreshCw className="w-4 h-4 animate-spin" />
+              <Spinner size="sm" />
               Loading models...
             </div>
           )}

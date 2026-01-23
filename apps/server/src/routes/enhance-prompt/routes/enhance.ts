@@ -12,7 +12,7 @@ import { resolveModelString } from '@automaker/model-resolver';
 import { CLAUDE_MODEL_MAP, type ThinkingLevel } from '@automaker/types';
 import { simpleQuery } from '../../../providers/simple-query-service.js';
 import type { SettingsService } from '../../../services/settings-service.js';
-import { getPromptCustomization } from '../../../lib/settings-helpers.js';
+import { getPromptCustomization, getProviderByModelId } from '../../../lib/settings-helpers.js';
 import {
   buildUserPrompt,
   isValidEnhancementMode,
@@ -33,6 +33,8 @@ interface EnhanceRequestBody {
   model?: string;
   /** Optional thinking level for Claude models */
   thinkingLevel?: ThinkingLevel;
+  /** Optional project path for per-project Claude API profile */
+  projectPath?: string;
 }
 
 /**
@@ -62,7 +64,7 @@ export function createEnhanceHandler(
 ): (req: Request, res: Response) => Promise<void> {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const { originalText, enhancementMode, model, thinkingLevel } =
+      const { originalText, enhancementMode, model, thinkingLevel, projectPath } =
         req.body as EnhanceRequestBody;
 
       // Validate required fields
@@ -121,8 +123,32 @@ export function createEnhanceHandler(
       // Build the user prompt with few-shot examples
       const userPrompt = buildUserPrompt(validMode, trimmedText, true);
 
-      // Resolve the model - use the passed model, default to sonnet for quality
-      const resolvedModel = resolveModelString(model, CLAUDE_MODEL_MAP.sonnet);
+      // Check if the model is a provider model (like "GLM-4.5-Air")
+      // If so, get the provider config and resolved Claude model
+      let claudeCompatibleProvider: import('@automaker/types').ClaudeCompatibleProvider | undefined;
+      let providerResolvedModel: string | undefined;
+      let credentials = await settingsService?.getCredentials();
+
+      if (model && settingsService) {
+        const providerResult = await getProviderByModelId(
+          model,
+          settingsService,
+          '[EnhancePrompt]'
+        );
+        if (providerResult.provider) {
+          claudeCompatibleProvider = providerResult.provider;
+          providerResolvedModel = providerResult.resolvedModel;
+          credentials = providerResult.credentials;
+          logger.info(
+            `Using provider "${providerResult.provider.name}" for model "${model}"` +
+              (providerResolvedModel ? ` -> resolved to "${providerResolvedModel}"` : '')
+          );
+        }
+      }
+
+      // Resolve the model - use provider resolved model, passed model, or default to sonnet
+      const resolvedModel =
+        providerResolvedModel || resolveModelString(model, CLAUDE_MODEL_MAP.sonnet);
 
       logger.debug(`Using model: ${resolvedModel}`);
 
@@ -137,6 +163,8 @@ export function createEnhanceHandler(
         allowedTools: [],
         thinkingLevel,
         readOnly: true, // Prompt enhancement only generates text, doesn't write files
+        credentials, // Pass credentials for resolving 'credentials' apiKeySource
+        claudeCompatibleProvider, // Pass provider for alternative endpoint configuration
       });
 
       const enhancedText = result.text;

@@ -41,6 +41,7 @@ import type { FeatureLoader } from './feature-loader.js';
 import { createChatOptions, validateWorkingDirectory } from '../lib/sdk-options.js';
 import { resolveModelString } from '@automaker/model-resolver';
 import { stripProviderPrefix } from '@automaker/types';
+import { getPromptCustomization, getProviderByModelId } from '../lib/settings-helpers.js';
 
 const logger = createLogger('IdeationService');
 
@@ -195,15 +196,39 @@ export class IdeationService {
       // Gather existing features and ideas to prevent duplicate suggestions
       const existingWorkContext = await this.gatherExistingWorkContext(projectPath);
 
+      // Get customized prompts from settings
+      const prompts = await getPromptCustomization(this.settingsService, '[IdeationService]');
+
       // Build system prompt for ideation
       const systemPrompt = this.buildIdeationSystemPrompt(
+        prompts.ideation.ideationSystemPrompt,
         contextResult.formattedPrompt,
         activeSession.session.promptCategory,
         existingWorkContext
       );
 
       // Resolve model alias to canonical identifier (with prefix)
-      const modelId = resolveModelString(options?.model ?? 'sonnet');
+      let modelId = resolveModelString(options?.model ?? 'sonnet');
+
+      // Try to find a provider for this model (e.g., GLM, MiniMax models)
+      let claudeCompatibleProvider: import('@automaker/types').ClaudeCompatibleProvider | undefined;
+      let credentials = await this.settingsService?.getCredentials();
+
+      if (this.settingsService && options?.model) {
+        const providerResult = await getProviderByModelId(
+          options.model,
+          this.settingsService,
+          '[IdeationService]'
+        );
+        if (providerResult.provider) {
+          claudeCompatibleProvider = providerResult.provider;
+          // Use resolved model from provider if available (maps to Claude model)
+          if (providerResult.resolvedModel) {
+            modelId = providerResult.resolvedModel;
+          }
+          credentials = providerResult.credentials ?? credentials;
+        }
+      }
 
       // Create SDK options
       const sdkOptions = createChatOptions({
@@ -227,6 +252,8 @@ export class IdeationService {
         maxTurns: 1, // Single turn for ideation
         abortController: activeSession.abortController!,
         conversationHistory: conversationHistory.length > 0 ? conversationHistory : undefined,
+        claudeCompatibleProvider, // Pass provider for alternative endpoint configuration
+        credentials, // Pass credentials for resolving 'credentials' apiKeySource
       };
 
       const stream = provider.executeQuery(executeOptions);
@@ -645,8 +672,12 @@ export class IdeationService {
       // Gather existing features and ideas to prevent duplicates
       const existingWorkContext = await this.gatherExistingWorkContext(projectPath);
 
+      // Get customized prompts from settings
+      const prompts = await getPromptCustomization(this.settingsService, '[IdeationService]');
+
       // Build system prompt for structured suggestions
       const systemPrompt = this.buildSuggestionsSystemPrompt(
+        prompts.ideation.suggestionsSystemPrompt,
         contextPrompt,
         category,
         count,
@@ -669,6 +700,9 @@ export class IdeationService {
       // Strip provider prefix - providers need bare model IDs
       const bareModel = stripProviderPrefix(modelId);
 
+      // Get credentials for API calls (uses hardcoded model, no phase setting)
+      const credentials = await this.settingsService?.getCredentials();
+
       const executeOptions: ExecuteOptions = {
         prompt: prompt.prompt,
         model: bareModel,
@@ -679,6 +713,7 @@ export class IdeationService {
         // Disable all tools - we just want text generation, not codebase analysis
         allowedTools: [],
         abortController: new AbortController(),
+        credentials, // Pass credentials for resolving 'credentials' apiKeySource
       };
 
       const stream = provider.executeQuery(executeOptions);
@@ -721,8 +756,14 @@ export class IdeationService {
 
   /**
    * Build system prompt for structured suggestion generation
+   * @param basePrompt - The base system prompt from settings
+   * @param contextFilesPrompt - Project context from loaded files
+   * @param category - The idea category to focus on
+   * @param count - Number of suggestions to generate
+   * @param existingWorkContext - Context about existing features/ideas
    */
   private buildSuggestionsSystemPrompt(
+    basePrompt: string,
     contextFilesPrompt: string | undefined,
     category: IdeaCategory,
     count: number = 10,
@@ -734,34 +775,17 @@ export class IdeationService {
 
     const existingWorkSection = existingWorkContext ? `\n\n${existingWorkContext}` : '';
 
-    return `You are an AI product strategist helping brainstorm feature ideas for a software project.
+    // Replace placeholder {{count}} if present, otherwise append count instruction
+    let prompt = basePrompt;
+    if (prompt.includes('{{count}}')) {
+      prompt = prompt.replace(/\{\{count\}\}/g, String(count));
+    } else {
+      prompt += `\n\nGenerate exactly ${count} suggestions.`;
+    }
 
-IMPORTANT: You do NOT have access to any tools. You CANNOT read files, search code, or run commands.
-You must generate suggestions based ONLY on the project context provided below.
-Do NOT say "I'll analyze" or "Let me explore" - you cannot do those things.
-
-Based on the project context and the user's prompt, generate exactly ${count} creative and actionable feature suggestions.
-
-YOUR RESPONSE MUST BE ONLY A JSON ARRAY - nothing else. No explanation, no preamble, no markdown code fences.
-
-Each suggestion must have this structure:
-{
-  "title": "Short, actionable title (max 60 chars)",
-  "description": "Clear description of what to build or improve (2-3 sentences)",
-  "rationale": "Why this is valuable - the problem it solves or opportunity it creates",
-  "priority": "high" | "medium" | "low"
-}
+    return `${prompt}
 
 Focus area: ${this.getCategoryDescription(category)}
-
-Guidelines:
-- Generate exactly ${count} suggestions
-- Be specific and actionable - avoid vague ideas
-- Mix different priority levels (some high, some medium, some low)
-- Each suggestion should be independently implementable
-- Think creatively - include both obvious improvements and innovative ideas
-- Consider the project's domain and target users
-- IMPORTANT: Do NOT suggest features or ideas that already exist in the "Existing Features" or "Existing Ideas" sections below
 
 ${contextSection}${existingWorkSection}`;
   }
@@ -1269,30 +1293,11 @@ ${contextSection}${existingWorkSection}`;
   // ============================================================================
 
   private buildIdeationSystemPrompt(
+    basePrompt: string,
     contextFilesPrompt: string | undefined,
     category?: IdeaCategory,
     existingWorkContext?: string
   ): string {
-    const basePrompt = `You are an AI product strategist and UX expert helping brainstorm ideas for improving a software project.
-
-Your role is to:
-- Analyze the codebase structure and patterns
-- Identify opportunities for improvement
-- Suggest actionable ideas with clear rationale
-- Consider user experience, technical feasibility, and business value
-- Be specific and reference actual files/components when possible
-
-When suggesting ideas:
-1. Provide a clear, concise title
-2. Explain the problem or opportunity
-3. Describe the proposed solution
-4. Highlight the expected benefit
-5. Note any dependencies or considerations
-
-IMPORTANT: Do NOT suggest features or ideas that already exist in the project. Check the "Existing Features" and "Existing Ideas" sections below to avoid duplicates.
-
-Focus on practical, implementable suggestions that would genuinely improve the product.`;
-
     const categoryContext = category
       ? `\n\nFocus area: ${this.getCategoryDescription(category)}`
       : '';

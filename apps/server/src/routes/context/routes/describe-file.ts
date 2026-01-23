@@ -12,14 +12,17 @@
 
 import type { Request, Response } from 'express';
 import { createLogger } from '@automaker/utils';
-import { DEFAULT_PHASE_MODELS } from '@automaker/types';
 import { PathNotAllowedError } from '@automaker/platform';
 import { resolvePhaseModel } from '@automaker/model-resolver';
 import { simpleQuery } from '../../../providers/simple-query-service.js';
 import * as secureFs from '../../../lib/secure-fs.js';
 import * as path from 'path';
 import type { SettingsService } from '../../../services/settings-service.js';
-import { getAutoLoadClaudeMdSetting } from '../../../lib/settings-helpers.js';
+import {
+  getAutoLoadClaudeMdSetting,
+  getPromptCustomization,
+  getPhaseModelWithOverrides,
+} from '../../../lib/settings-helpers.js';
 
 const logger = createLogger('DescribeFile');
 
@@ -130,11 +133,12 @@ export function createDescribeFileHandler(
       // Get the filename for context
       const fileName = path.basename(resolvedPath);
 
+      // Get customized prompts from settings
+      const prompts = await getPromptCustomization(settingsService, '[DescribeFile]');
+
       // Build prompt with file content passed as structured data
       // The file content is included directly, not via tool invocation
-      const prompt = `Analyze the following file and provide a 1-2 sentence description suitable for use as context in an AI coding assistant. Focus on what the file contains, its purpose, and why an AI agent might want to use this context in the future (e.g., "API documentation for the authentication endpoints", "Configuration file for database connections", "Coding style guidelines for the project").
-
-Respond with ONLY the description text, no additional formatting, preamble, or explanation.
+      const prompt = `${prompts.contextDescription.describeFilePrompt}
 
 File: ${fileName}${truncated ? ' (truncated)' : ''}
 
@@ -151,15 +155,23 @@ ${contentToAnalyze}`;
         '[DescribeFile]'
       );
 
-      // Get model from phase settings
-      const settings = await settingsService?.getGlobalSettings();
-      logger.info(`Raw phaseModels from settings:`, JSON.stringify(settings?.phaseModels, null, 2));
-      const phaseModelEntry =
-        settings?.phaseModels?.fileDescriptionModel || DEFAULT_PHASE_MODELS.fileDescriptionModel;
-      logger.info(`fileDescriptionModel entry:`, JSON.stringify(phaseModelEntry));
+      // Get model from phase settings with provider info
+      const {
+        phaseModel: phaseModelEntry,
+        provider,
+        credentials,
+      } = await getPhaseModelWithOverrides(
+        'fileDescriptionModel',
+        settingsService,
+        cwd,
+        '[DescribeFile]'
+      );
       const { model, thinkingLevel } = resolvePhaseModel(phaseModelEntry);
 
-      logger.info(`Resolved model: ${model}, thinkingLevel: ${thinkingLevel}`);
+      logger.info(
+        `Resolved model: ${model}, thinkingLevel: ${thinkingLevel}`,
+        provider ? `via provider: ${provider.name}` : 'direct API'
+      );
 
       // Use simpleQuery - provider abstraction handles routing to correct provider
       const result = await simpleQuery({
@@ -171,6 +183,8 @@ ${contentToAnalyze}`;
         thinkingLevel,
         readOnly: true, // File description only reads, doesn't write
         settingSources: autoLoadClaudeMd ? ['user', 'project', 'local'] : undefined,
+        claudeCompatibleProvider: provider, // Pass provider for alternative endpoint configuration
+        credentials, // Pass credentials for resolving 'credentials' apiKeySource
       });
 
       const description = result.text;
