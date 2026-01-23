@@ -23,6 +23,7 @@ COPY package*.json ./
 # Copy all libs package.json files (centralized - add new libs here)
 COPY libs/types/package*.json ./libs/types/
 COPY libs/utils/package*.json ./libs/utils/
+COPY libs/spec-parser/package*.json ./libs/spec-parser/
 COPY libs/prompts/package*.json ./libs/prompts/
 COPY libs/platform/package*.json ./libs/platform/
 COPY libs/model-resolver/package*.json ./libs/model-resolver/
